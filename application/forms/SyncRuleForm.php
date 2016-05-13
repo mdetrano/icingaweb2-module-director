@@ -51,6 +51,17 @@ class SyncRuleForm extends DirectorObjectForm
             ))
         ));
 
+        $this->addElement('text', 'filter_expression', array(
+            'label'       => $this->translate('Filter Expression'),
+            'description' => sprintf(
+                $this->translate(
+                    'Sync only part of your imported objects with this rule. Icinga Web 2'
+                    . ' filter syntax is allowed, so this could look as follows: %s'
+                ),
+                '(host=a|host=b)&!ip=127.*' # TODO: provide a useful example
+            ),
+        ));
+
         $this->addElement('select', 'purge_existing', array(
             'label' => $this->translate('Purge'),
             'description'  => $this->translate(
@@ -65,15 +76,15 @@ class SyncRuleForm extends DirectorObjectForm
             ))
         ));
 
-        $this->addElement('text', 'filter_expression', array(
-            'label'       => $this->translate('Filter Expression'),
+        $this->addElement('text', 'purge_filter_expression', array(
+            'label' => $this->translate('Purge Filter'),
             'description' => sprintf(
                 $this->translate(
-                    'Sync only part of your imported objects with this rule. Icinga Web 2'
-                    . ' filter syntax is allowed, so this could look as follows: %s'
+                    'Only purge objects in Icinga Director, that are not synced by this rule and match this filter.'
+                    . 'Icinga Web 2 filter syntax is allowed, so this could look as follows: %s'
                 ),
-                '(host=a|host=b)&!ip=127.*'
-            ),
+                '(host=a|host=b)&!ip=127.*' # TODO: provide a useful example
+            )
         ));
 
         $this->setButtons();

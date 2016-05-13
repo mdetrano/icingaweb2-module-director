@@ -652,7 +652,10 @@ class Sync
                 // Stats?
 
             } elseif ($object->hasBeenLoadedFromDb() && $this->rule->purge_existing === 'y') {
-                $object->markForRemoval();
+                // mark the object for removal, when the purge filter matches
+                if ($this->rule->purgeMatches($object)) {
+                    $object->markForRemoval();
+                }
 
                 // TODO: this is for stats, preview, summary:
                 // $this->remove[] = $object;
@@ -688,6 +691,7 @@ class Sync
         $modified = 0;
         $deleted = 0;
         foreach ($objects as $object) {
+            /* TODO: replace this block, and check that the object_type must not be changed
             if ($object instanceof IcingaObject && $object->isTemplate()) {
                 // TODO: allow to sync templates
                 if ($object->hasBeenModified()) {
@@ -698,6 +702,7 @@ class Sync
                 }
                 continue;
             }
+            */
 
             if ($object instanceof IcingaObject && $object->shouldBeRemoved()) {
                 $object->delete($db);

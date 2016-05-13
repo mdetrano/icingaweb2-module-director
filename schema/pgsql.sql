@@ -1408,6 +1408,7 @@ CREATE TABLE sync_rule (
   update_policy enum_sync_rule_update_policy NOT NULL,
   purge_existing enum_boolean NOT NULL DEFAULT 'n',
   filter_expression text DEFAULT NULL,
+  purge_filter_expression TEXT DEFAULT NULL,
   sync_state enum_sync_state NOT NULL DEFAULT 'unknown',
   last_error_message character varying(255) NULL DEFAULT NULL,
   last_attempt timestamp with time zone NULL DEFAULT NULL,

@@ -1255,6 +1255,7 @@ CREATE TABLE sync_rule (
   update_policy ENUM('merge', 'override', 'ignore') NOT NULL,
   purge_existing ENUM('y', 'n') NOT NULL DEFAULT 'n',
   filter_expression TEXT DEFAULT NULL,
+  purge_filter_expression TEXT DEFAULT NULL,
   sync_state ENUM(
     'unknown',
     'in-sync',

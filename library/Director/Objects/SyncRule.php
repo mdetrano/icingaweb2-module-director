@@ -17,20 +17,22 @@ class SyncRule extends DbObject
     protected $autoincKeyName = 'id';
 
     protected $defaultProperties = array(
-        'id'                 => null,
-        'rule_name'          => null,
-        'object_type'        => null,
-        'update_policy'      => null,
-        'purge_existing'     => null,
-        'filter_expression'  => null,
-        'sync_state'         => 'unknown',
-        'last_error_message' => null,
-        'last_attempt'       => null,
+        'id'                      => null,
+        'rule_name'               => null,
+        'object_type'             => null,
+        'update_policy'           => null,
+        'purge_existing'          => null,
+        'filter_expression'       => null,
+        'purge_filter_expression' => null,
+        'sync_state'              => 'unknown',
+        'last_error_message'      => null,
+        'last_attempt'            => null,
     );
 
     private $sync;
 
     private $filter;
+    private $purge_filter;
 
     public function listInvolvedSourceIds()
     {
@@ -55,7 +57,7 @@ class SyncRule extends DbObject
         if (! $this->hasBeenLoadedFromDb()) {
             return 1;
         }
-        
+
         $db = $this->getDb();
         return $db->fetchOne(
             $db->select()
@@ -124,6 +126,11 @@ class SyncRule extends DbObject
         return $this->sync;
     }
 
+    /**
+     * Builds and returns the configured filter for imported data.
+     *
+     * @return Filter
+     */
     protected function filter()
     {
         if ($this->filter === null) {
@@ -131,6 +138,36 @@ class SyncRule extends DbObject
         }
 
         return $this->filter;
+    }
+
+    /**
+     * Checks if the object in question matches the purge rule, so it would be deleted if it is not in imported data.
+     *
+     * @param  DbObject  $row
+     *
+     * @return bool
+     */
+    public function purgeMatches($row)
+    {
+        if ($this->purge_filter_expression === null) {
+            return true;
+        }
+
+        return $this->purgeFilter()->matches($row);
+    }
+
+    /**
+     * Builds and returns the configured filter for purging data.
+     *
+     * @return Filter
+     */
+    protected function purgeFilter()
+    {
+        if ($this->purge_filter === null) {
+            $this->purge_filter = Filter::fromQueryString($this->purge_filter_expression);
+        }
+
+        return $this->purge_filter;
     }
 
     public function fetchSyncProperties()
