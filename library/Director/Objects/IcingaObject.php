@@ -9,6 +9,8 @@ use Icinga\Module\Director\IcingaConfig\IcingaConfig;
 use Icinga\Module\Director\IcingaConfig\IcingaConfigRenderer;
 use Icinga\Module\Director\IcingaConfig\IcingaConfigHelper as c;
 use Icinga\Data\Filter\Filter;
+
+use Icinga\Module\Director\Exception\NestingException;
 use Icinga\Exception\ConfigurationError;
 use Icinga\Exception\ProgrammingError;
 use Exception;
@@ -596,11 +598,27 @@ abstract class IcingaObject extends DbObject implements IcingaConfigRenderer
             $imports = array($imports);
         }
 
-        $this->imports()->set($imports);
-        if ($this->imports()->hasBeenModified()) {
+        $importObj = $this->imports();
+        $old_imports = $this->imports()->listImportNames();
+
+        // try to set imports and resolve properties
+        try {
+            $importObj->set($imports);
+            if ($importObj->hasBeenModified()) {
+                $this->clearImportedObjects();
+                $this->invalidateResolveCache();
+                // force resolve to "validate" imports
+                $this->resolveProperties();
+            }
+        }
+        catch (NestingException $e) {
+            // revert imports and throw error to form
+            $importObj->set($old_imports);
             $this->clearImportedObjects();
             $this->invalidateResolveCache();
+            throw $e;
         }
+
     }
 
     public function getImports()
@@ -769,6 +787,8 @@ abstract class IcingaObject extends DbObject implements IcingaConfigRenderer
         return $db->fetchOne($query);
     }
 
+    protected static $importLoopDetection = array();
+
     protected function resolve($what)
     {
         if ($this->hasResolveCached($what)) {
@@ -785,18 +805,38 @@ abstract class IcingaObject extends DbObject implements IcingaConfigRenderer
         $getInherited = 'getInherited' . $what;
         $getOrigins   = 'getOrigins'  . $what;
 
+        $type = $this->getType();
+
+        // add myself to loop detection stack
+        static::$importLoopDetection[$type][$this->getObjectName()] = 1;
+
         $blacklist = array('id', 'object_type', 'object_name', 'disabled');
         foreach ($objects as $name => $object) {
-            $origins = $object->$getOrigins();
+            if (
+                array_key_exists($type, static::$importLoopDetection)
+                && array_key_exists($name, static::$importLoopDetection[$type])
+            ) {
+                throw new NestingException(
+                    'Detected a loop while resolving %s \'%s\', involving: %s',
+                    $type,
+                    $name,
+                    join(', ', array_keys(static::$importLoopDetection[$type]))
+                );
+            }
+            else { // only deep resolve values when not in a loop
+                static::$importLoopDetection[$type][$name] = 1;
 
-            foreach ($object->$getInherited() as $key => $value) {
-                if (in_array($key, $blacklist)) {
-                    continue;
+                $origins = $object->$getOrigins();
+
+                foreach ($object->$getInherited() as $key => $value) {
+                    if (in_array($key, $blacklist)) {
+                        continue;
+                    }
+                    // $vals[$name]->$key = $value;
+                    $vals['_MERGED_']->$key = $value;
+                    $vals['_INHERITED_']->$key = $value;
+                    $vals['_ORIGINS_']->$key = $origins->$key;
                 }
-                // $vals[$name]->$key = $value;
-                $vals['_MERGED_']->$key = $value;
-                $vals['_INHERITED_']->$key = $value;
-                $vals['_ORIGINS_']->$key = $origins->$key;
             }
 
             foreach ($object->$get() as $key => $value) {
@@ -811,7 +851,13 @@ abstract class IcingaObject extends DbObject implements IcingaConfigRenderer
                 $vals['_INHERITED_']->$key = $value;
                 $vals['_ORIGINS_']->$key = $name;
             }
+
+            // leave object at loop detection
+            unset(static::$importLoopDetection[$type][$name]);
         }
+
+        // delete myself from loop detection
+        unset(static::$importLoopDetection[$type][$this->getObjectName()]);
 
         foreach ($this->$get() as $key => $value) {
             if ($value === null) {

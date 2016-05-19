@@ -3,6 +3,8 @@
 namespace Icinga\Module\Director\Web\Form;
 
 use Exception;
+use Icinga\Module\Director\Exception\NestingException;
+
 use Icinga\Module\Director\IcingaConfig\StateFilterSet;
 use Icinga\Module\Director\IcingaConfig\TypeFilterSet;
 use Icinga\Module\Director\Objects\IcingaObject;
@@ -68,11 +70,14 @@ abstract class DirectorObjectForm extends QuickForm
         }
         if ($this->hasBeenSent()) {
             if ($el = $this->getElement('imports')) {
-                $this->populate($this->getRequest()->getPost());
-                $object->imports = $el->getValue();
+                try {
+                    $object->setImports($el->getValue());
+                } catch (NestingException $e) {
+                    // ignore - setImports will reset the old value
+                    // the input field should show an error later
+                }
             }
         }
-
         $this->object->importedObjects();
         $object->resolveUnresolvedRelatedProperties();
         return $this;
