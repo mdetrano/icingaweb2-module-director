@@ -874,6 +874,18 @@ CREATE UNIQUE INDEX hostgroup_inheritance_unique_order ON icinga_hostgroup_inher
 CREATE INDEX hostgroup_inheritance_hostgroup ON icinga_hostgroup_inheritance (hostgroup_id);
 CREATE INDEX hostgroup_inheritance_hostgroup_parent ON icinga_hostgroup_inheritance (parent_hostgroup_id);
 
+CREATE TABLE icinga_hostgroup_assignment (
+  id bigserial,
+  hostgroup_id integer NOT NULL,
+  filter_string TEXT NOT NULL,
+  assign_type enum_assign_type NOT NULL DEFAULT 'assign',
+  PRIMARY KEY (id),
+  CONSTRAINT icinga_hostgroup_assignment
+  FOREIGN KEY (hostgroup_id)
+  REFERENCES icinga_hostgroup (id)
+  ON DELETE CASCADE
+  ON UPDATE CASCADE
+);
 
 CREATE TABLE icinga_servicegroup (
   id serial,
