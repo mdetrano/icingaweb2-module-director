@@ -73,6 +73,14 @@ class EventstreamCommand extends DdoCommand
             }
 
             echo "Got nothing for 1secs\n";
+
+            if ($cnt > 0) {
+                $time = time();
+                echo "Committing $cnt events\n";
+                $cnt = 0;
+                $db->commit();
+                $hasTransaction = false;
+            }
         }
     }
 
