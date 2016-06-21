@@ -105,5 +105,15 @@ abstract class StateObject extends DdoObject
         return $this->get('acknowledged') === 'y';
     }
 
+    public function getUniqueName()
+    {
+        $key = $this->get('host');
+        if ($this->hasProperty('service')) {
+            $key .= '!' . $this->get('service');
+        }
+
+        return $key;
+    }
+
     abstract protected function getSortingState();
 }
