@@ -58,7 +58,7 @@ class EventstreamCommand extends DdoCommand
                     $cnt++;
                     $object->store();
                 } else {
-                    printf("%s has not been modified\n", $object->getUniqueName());
+                    // printf("%s has not been modified\n", $object->getUniqueName());
                 }
 
                 if (($cnt >= 1000)
@@ -72,7 +72,7 @@ class EventstreamCommand extends DdoCommand
                 }
             }
 
-            echo "Got nothing for 1secs\n";
+            // echo "Got nothing for 1secs\n";
 
             if ($cnt > 0) {
                 $time = time();
