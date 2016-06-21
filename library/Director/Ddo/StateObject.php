@@ -40,22 +40,22 @@ abstract class StateObject extends DdoObject
         'hard',
     );
 
-    public function processCheckResult($result)
+    public function processCheckResult($result, $timestamp)
     {
-        $checkResult = $result->check_result;
-        $vars = $checkResult->vars_after;
+        $vars = $result->vars_after;
 
-        $currentState = (int) $checkResult->state;
+        $currentState = (int) $result->state;
 
         if ($this->state === null || $currentState !== (int) $this->state) {
-            $this->last_state_change = $result->timestamp;
+            $this->last_state_change = $timestamp;
         }
 
-        $this->state      = $currentState;
-        $this->state_type = $vars->state_type;
-        $this->problem    = $currentState > 0;
-        $this->reachable  = $vars->reachable;
-        $this->attempt    = $vars->attempt;
+        $this->state        = $currentState;
+        $this->state_type   = $vars->state_type;
+        $this->problem      = $currentState > 0;
+        $this->reachable    = $vars->reachable;
+        $this->attempt      = $vars->attempt;
+        $this->check_source_checksum = sha1($result->check_source, true);
 
         // TODO: Handle those
         $this->acknowledged = false;
@@ -66,6 +66,36 @@ abstract class StateObject extends DdoObject
         if ($this->hasBeenModified()) {
             $this->last_update = time();
         }
+    }
+
+    public function processDowntimeAdded($result, $timestamp)
+    {
+        echo "Got downtime\n";
+        print_r($result);
+    }
+
+    public function processDowntimeRemoved($result, $timestamp)
+    {
+        echo "Remove downtime\n";
+        print_r($result);
+    }
+
+    public function processDowntimeTriggered($result, $timestamp)
+    {
+        echo "Triggered downtime\n";
+        print_r($result);
+    }
+
+    public function processAcknowledgementSet($result, $timestamp)
+    {
+        $this->acknowledged = true;
+        $this->severity   = $this->calculateSeverity();
+    }
+
+    public function processAcknowledgementCleared($result, $timestamp)
+    {
+        $this->acknowledged = false;
+        $this->severity   = $this->calculateSeverity();
     }
 
     public function setState_type($type)

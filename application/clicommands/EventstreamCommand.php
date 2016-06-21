@@ -47,6 +47,9 @@ class EventstreamCommand extends DdoCommand
             while ($res = $redis->brpop('icinga2::events', 1)) {
                 // res = array(queuename, value)
                 $object = $list->processCheckResult(json_decode($res[1]));
+                if ($object === false) {
+                    continue;
+                }
 
                 if ($object->hasBeenModified()) {
                     printf("%s has been modified\n", $object->getUniqueName());

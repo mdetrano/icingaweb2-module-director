@@ -22,7 +22,38 @@ class StateList
 
     public function processCheckResult($result)
     {
-        list($host, $service) = $this->getHostServiceFromResult($result);
+        $type = $result->type;
+        $types = array(
+            'CheckResult'            => 'check_result',
+            'StateChange'            => 'check_result',
+            'Notification',
+            'AcknowledgementSet'     => null,
+            'AcknowledgementCleared' => null,
+            'CommentAdded'           => 'comment',
+            'CommentRemoved'         => 'comment',
+            'DowntimeAdded'          => 'downtime',
+            'DowntimeRemoved'        => 'downtime',
+            'DowntimeTriggered'      => 'downtime',
+        );
+
+        if (! array_key_exists($type, $types)) {
+            var_dump($type);
+            var_dump($result);
+            die('Type incomplete');
+        }
+
+        $eventProperty = $types[$type];
+        $eventData = $eventProperty === null ? $result : $result->$eventProperty;
+
+        list($host, $service) = $this->getHostServiceFromResult($result, $eventProperty);
+
+        if ($host === null) {
+            echo "Event has NO HOST\n";
+            var_dump($type);
+            var_dump($result);
+
+            return false;
+        }
 
         $key = self::createKey($host, $service);
 
@@ -34,7 +65,10 @@ class StateList
 
         $this->objects[$key] = $object;
 
-        $object->processCheckResult($result);
+        $method = 'process' . $type;
+        if (method_exists($object, $method)) {
+            $object->$method($eventData, $result->timestamp);
+        }
 
         return $object;
     }
@@ -65,14 +99,26 @@ class StateList
         return array_key_exists($key, $this->objects);
     }
 
-    protected function getHostServiceFromResult($result)
+    protected function getHostServiceFromResult($result, $eventProperty)
     {
-        $list = array($result->host);
+        if (property_exists($result, 'host')) {
+            $list = array($result->host);
+        } elseif (property_exists($result->$eventProperty, 'host_name')) {
+            $list = array($result->$eventProperty->host_name);
+        } else {
+            return array(null, null);
+        }
 
         if (property_exists($result, 'service')) {
             $list[] = $result->service;
+        } elseif (property_exists($result, 'service_name')) {
+            $list[] = $result->$eventProperty->service_name;
         } else {
             $list[] = null;
+        }
+
+        if (count($list) === 2 && $list[1] === '') {
+            $list[1] = null;
         }
 
         return $list;
