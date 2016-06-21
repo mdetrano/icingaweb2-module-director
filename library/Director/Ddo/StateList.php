@@ -14,6 +14,10 @@ class StateList
     {
         $this->connection = $connection;
         $this->db = $connection->getDbAdapter();
+        $this->objects = array_merge(
+            HostState::loadAll($this->connection, null, 'checksum'),
+            ServiceState::loadAll($this->connection, null, 'checksum')
+        );
     }
 
     public function processCheckResult($result)
