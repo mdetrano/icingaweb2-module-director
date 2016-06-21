@@ -44,11 +44,27 @@ abstract class StateObject extends DdoObject
         $checkResult = $result->check_result;
         $vars = $checkResult->vars_after;
 
-        $this->state      = $checkResult->state;
+        $currentState = (int) $checkResult->state;
+
+        if ($this->state === null || $currentState !== (int) $this->state) {
+            $this->last_state_change = $result->timestamp;
+        }
+
+        $this->state      = $currentState;
         $this->state_type = $vars->state_type;
+        $this->problem    = $currentState > 0;
         $this->reachable  = $vars->reachable;
         $this->attempt    = $vars->attempt;
+
+        // TODO: Handle those
+        $this->acknowledged = false;
+        $this->in_downtime  = false;
+
         $this->severity   = $this->calculateSeverity();
+
+        if ($this->hasBeenModified()) {
+            $this->last_update = time();
+        }
     }
 
     public function setState_type($type)
@@ -58,7 +74,7 @@ abstract class StateObject extends DdoObject
         }
 
         return $this->reallySet('state_type', $type);
-     }
+    }
 
     /*
     // Draft for history updates
