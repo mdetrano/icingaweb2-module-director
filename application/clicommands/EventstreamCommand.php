@@ -44,11 +44,9 @@ class EventstreamCommand extends DdoCommand
         // TODO: 0 is forever, leave loop after a few sec and enter again
         while (true) {
 
-            while ($res = $redis->brpop('icinga2::events', 3)) {
+            while ($res = $redis->brpop('icinga2::events', 1)) {
                 // res = array(queuename, value)
                 $object = $list->processCheckResult(json_decode($res[1]));
-
-                $cnt++;
 
                 if ($object->hasBeenModified()) {
                     printf("%s has been modified\n", $object->getUniqueName());
@@ -57,13 +55,14 @@ class EventstreamCommand extends DdoCommand
                         $db->beginTransaction();
                         $hasTransaction = true;
                     }
+                    $cnt++;
                     $object->store();
                 } else {
                     printf("%s has not been modified\n", $object->getUniqueName());
                 }
 
                 if (($cnt >= 1000)
-                    || (($newtime = time()) - $time > 1)
+                    || ($cnt > 0 && (($newtime = time()) - $time > 1))
                 ) {
                     $time = $newtime;
                     echo "Committing $cnt events\n";
@@ -72,7 +71,8 @@ class EventstreamCommand extends DdoCommand
                     $hasTransaction = false;
                 }
             }
-            echo "Got nothing for 3secs\n";
+
+            echo "Got nothing for 1secs\n";
         }
     }
 
