@@ -4,7 +4,7 @@ namespace Icinga\Module\Director\Ddo;
 
 class HostState extends StateObject
 {
-    protected $table = 'ddo_host_state';
+    protected $table = 'host_state';
 
     protected $keyName = 'checksum';
 
@@ -13,17 +13,30 @@ class HostState extends StateObject
         'checksum'              => null,
         'host'                  => null,
         'state'                 => null,
-        'state_type'            => null,
         'hard_state'            => null,
+        'state_type'            => null,
+        'attempt'               => null,
+        'problem'               => null,
+        'reachable'             => null,
         'severity'              => null,
         'acknowledged'          => null,
         'in_downtime'           => null,
         'last_update'           => null, // only on store if modified
         'last_state_change'     => null,
         'last_comment_checksum' => null,
-        'attempt'               => null,
-        'reachable'             => null,
         'check_source_checksum' => null,
+    );
+
+    protected $booleans = array(
+        'problem',
+        'reachable',
+        'acknowledged',
+        'in_downtime'
+    );
+
+    protected $timestamps = array(
+        'last_update',
+        'last_state_change',
     );
 
     protected function getSortingState()

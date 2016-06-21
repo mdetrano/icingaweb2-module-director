@@ -4,20 +4,21 @@ namespace Icinga\Module\Director\Ddo;
 
 class ServiceState extends StateObject
 {
-    protected $table = 'ddo_service_state';
+    protected $table = 'service_state';
 
     protected $keyName = 'checksum';
 
     protected $defaultProperties = array(
         // active ?
         'checksum'              => null,
-        'host_checksum'         => null,
+        // 'host_checksum'         => null,
         'host'                  => null,
         'service'               => null,
         'state'                 => null,
-        'state_type'            => null,
         'hard_state'            => null,
+        'state_type'            => null,
         'attempt'               => null,
+        'problem'               => null,
         'reachable'             => null,
         'severity'              => null,
         'acknowledged'          => null,
@@ -26,6 +27,18 @@ class ServiceState extends StateObject
         'last_state_change'     => null,
         'last_comment_checksum' => null,
         'check_source_checksum' => null,
+    );
+
+    protected $booleans = array(
+        'problem',
+        'reachable',
+        'acknowledged',
+        'in_downtime'
+    );
+
+    protected $timestamps = array(
+        'last_update',
+        'last_state_change',
     );
 
     protected function calculateSeverity()
