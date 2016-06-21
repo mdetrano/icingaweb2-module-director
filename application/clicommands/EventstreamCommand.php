@@ -3,10 +3,11 @@
 namespace Icinga\Module\Director\Clicommands;
 
 use Exception;
-use Icinga\Module\Director\Cli\Command;
+use Icinga\Module\Director\Cli\DdoCommand;
+use Icinga\Module\Director\Ddo\StateList;
 use Icinga\Module\Director\Redis;
 
-class EventstreamCommand extends Command
+class EventstreamCommand extends DdoCommand
 {
     public function streamAction()
     {
@@ -28,6 +29,51 @@ class EventstreamCommand extends Command
             "Stored id %d\n",
             $redis->lpush('icinga2::events', json_encode($event))
         );
+    }
+
+    public function processStatesAction()
+    {
+        $redis = Redis::instance();
+        $time = time();
+        $cnt = 0;
+        $hasTransaction = false;
+        $ddo = $this->ddo();
+        $db = $ddo->getDbAdapter();
+        $list = new StateList($ddo);
+
+        // TODO: 0 is forever, leave loop after a few sec and enter again
+        while (true) {
+
+            while ($res = $redis->brpop('icinga2::events', 3)) {
+                // res = array(queuename, value)
+                $object = $list->processCheckResult(json_decode($res[1]));
+
+                $cnt++;
+
+                if ($object->hasBeenModified()) {
+                    printf("%s has been modified\n", $object->getUniqueName());
+
+                    if (! $hasTransaction) {
+                        $db->beginTransaction();
+                        $hasTransaction = true;
+                    }
+                    $object->store();
+                } else {
+                    printf("%s has not been modified\n", $object->getUniqueName());
+                }
+
+                if (($cnt >= 1000)
+                    || (($newtime = time()) - $time > 1)
+                ) {
+                    $time = $newtime;
+                    echo "Committing $cnt events\n";
+                    $cnt = 0;
+                    $db->commit();
+                    $hasTransaction = false;
+                }
+            }
+            echo "Got nothing for 3secs\n";
+        }
     }
 
     public function storeEventsAction()
