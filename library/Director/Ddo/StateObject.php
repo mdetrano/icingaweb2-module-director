@@ -70,8 +70,8 @@ abstract class StateObject extends DdoObject
 
     public function setState_type($type)
     {
-        if (ctype_digit($type)) {
-            $type = $this->stateTypes[$type];
+        if (ctype_digit((string) $type)) {
+            $type = self::$stateTypes[(int) $type];
         }
 
         return $this->reallySet('state_type', $type);
