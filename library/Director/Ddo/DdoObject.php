@@ -10,6 +10,7 @@ if (version_compare(PHP_VERSION, '5.4.0') <= 0) {
 
 use Icinga\Module\Director\Data\Db\DbObject;
 use Icinga\Exception\ProgrammingError;
+use Icinga\Util\StringHelper;
 
 abstract class DdoObject extends DbObject
 {
@@ -27,6 +28,10 @@ abstract class DdoObject extends DbObject
             return parent::set($key, $this->normalizeTimestamp($value));
         }
 
+        $setter = 'set' . StringHelper::cname($key);
+        if (method_exists($this, $setter)) {
+            return $this->$setter($value);
+        }
         return parent::set($key, $value);
     }
 
@@ -66,8 +71,9 @@ abstract class DdoObject extends DbObject
         $this->hasBeenModified = false;
         $this->loadedFromDb = true;
 
-        $properties = array_merge($other->getProperties(), $this->getProperties());
-
-        $this->setProperties($properties);
+        // TODO(el): Evaluate why the array_diff is necessary
+        $this->setProperties(
+            array_diff($this->getProperties(), array_merge($other->getProperties(), $this->getProperties()))
+        );
     }
 }
