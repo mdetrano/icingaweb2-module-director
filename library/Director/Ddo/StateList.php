@@ -1,6 +1,6 @@
 <?php
 
-namespace Icinga\Module\Director\StateList;
+namespace Icinga\Module\Director\Ddo;
 
 class StateList
 {
@@ -8,7 +8,7 @@ class StateList
 
     protected $db;
 
-    protected $objects;
+    protected $objects = array();
 
     public function __construct(DdoDb $connection)
     {
@@ -29,8 +29,23 @@ class StateList
         }
 
         $object->processCheckResult($result);
-        if ($object->hasBeenModified()) {
-            $object->store();
+
+        return $object;
+    }
+
+    protected function createObject($host, $service, $key)
+    {
+        if ($service === null) {
+            return HostState::create(array(
+                'checksum' => $key,
+                'host'     => $host,
+            ), $this->connection);
+        } else {
+            return ServiceState::create(array(
+                'checksum' => $key,
+                'host'     => $host,
+                'service'  => $service,
+            ), $this->connection);
         }
     }
 
@@ -55,8 +70,8 @@ class StateList
     protected function createKey($host, $service = null)
     {
         $key = $host;
-        if (property_exists($result, 'service')) {
-            $key .= '!' . $result->service;
+        if ($service !== null) {
+            $key .= '!' . $service;
         }
 
         return sha1($key, true);
