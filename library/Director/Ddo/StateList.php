@@ -28,6 +28,8 @@ class StateList
             $object = $this->createObject($host, $service, $key);
         }
 
+        $this->objects[$key] = $object;
+
         $object->processCheckResult($result);
 
         return $object;
@@ -47,6 +49,11 @@ class StateList
                 'service'  => $service,
             ), $this->connection);
         }
+    }
+
+    protected function getObject($key)
+    {
+        return $this->objects[$key];
     }
 
     protected function hasKey($key)
