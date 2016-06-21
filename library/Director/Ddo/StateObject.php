@@ -2,10 +2,7 @@
 
 namespace Icinga\Module\Director\Ddo;
 
-use Icinga\Module\Director\Data\Db\DbObject;
-use Icinga\Module\Director\Ddo\DdoDb;
-
-abstract class StateObject extends DbObject
+abstract class StateObject extends DdoObject
 {
     const FLAG_DOWNTIME   = 1;
     const FLAG_ACK        = 2;
@@ -39,9 +36,10 @@ abstract class StateObject extends DbObject
 
     public function processCheckResult($result)
     {
-        $vars = $result->vars_after;
+        $checkResult = $result->check_result;
+        $vars = $checkResult->vars_after;
 
-        $this->state      = $result->state;
+        $this->state      = $checkResult->state;
         $this->state_type = $vars->state_type;
         $this->reachable  = $vars->reachable;
         $this->attempt    = $vars->attempt;
