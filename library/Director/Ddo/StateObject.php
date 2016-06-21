@@ -34,6 +34,11 @@ abstract class StateObject extends DdoObject
         self::ICINGA_OK       => 0,
     );
 
+    protected static $stateTypes = array(
+        'soft',
+        'hard',
+    );
+
     public function processCheckResult($result)
     {
         $checkResult = $result->check_result;
@@ -45,6 +50,15 @@ abstract class StateObject extends DdoObject
         $this->attempt    = $vars->attempt;
         $this->severity   = $this->calculateSeverity();
     }
+
+    public function setState_type($type)
+    {
+        if (ctype_digit($type)) {
+            $type = $this->stateTypes[$type];
+        }
+
+        return $this->reallySet('state_type', $type);
+     }
 
     /*
     // Draft for history updates
