@@ -18,6 +18,7 @@ class ServiceState extends StateObject
         'state_type'            => null,
         'hard_state'            => null,
         'attempt'               => null,
+        'reachable'             => null,
         'severity'              => null,
         'acknowledged'          => null,
         'in_downtime'           => null,

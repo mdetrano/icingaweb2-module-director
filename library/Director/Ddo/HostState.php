@@ -22,6 +22,7 @@ class HostState extends StateObject
         'last_state_change'     => null,
         'last_comment_checksum' => null,
         'attempt'               => null,
+        'reachable'             => null,
         'check_source_checksum' => null,
     );
 
