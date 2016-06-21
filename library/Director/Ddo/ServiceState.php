@@ -2,7 +2,7 @@
 
 namespace Icinga\Module\Director\Ddo;
 
-class ServiceState extends DdoObject
+class ServiceState extends StateObject
 {
     protected $table = 'ddo_service_state';
 

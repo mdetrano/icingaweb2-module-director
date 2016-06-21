@@ -2,7 +2,7 @@
 
 namespace Icinga\Module\Director\Ddo;
 
-class HostState extends DdoObject
+class HostState extends StateObject
 {
     protected $table = 'ddo_host_state';
 
