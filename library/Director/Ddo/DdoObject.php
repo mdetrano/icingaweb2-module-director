@@ -76,4 +76,16 @@ abstract class DdoObject extends DbObject
             array_diff($this->getProperties(), array_merge($other->getProperties(), $this->getProperties()))
         );
     }
+
+    public function afterSetProperties()
+    {
+
+    }
+
+    public function setProperties($props)
+    {
+        $return = parent::setProperties($props);
+        $this->afterSetProperties();
+        return $return;
+    }
 }
