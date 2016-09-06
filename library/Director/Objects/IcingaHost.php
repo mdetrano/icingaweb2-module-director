@@ -138,6 +138,8 @@ class IcingaHost extends IcingaObject
             $properties[$vars] = $hostVars;
         }
 
+        $properties['Host Groups'] = array ( $prefix . 'groups' => 'hostgroups');
+
         return $properties;
     }
 

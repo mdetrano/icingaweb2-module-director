@@ -3,6 +3,8 @@
 namespace Icinga\Module\Director\Objects;
 
 use Icinga\Module\Director\IcingaConfig\IcingaConfigHelper as c;
+use Icinga\Data\Db\DbConnection;
+use Icinga\Module\Director\Db;
 
 class IcingaService extends IcingaObject
 {
@@ -78,6 +80,70 @@ class IcingaService extends IcingaObject
 
     protected $prioritizedProperties = array('host_id');
 
+
+    public static function enumProperties(DbConnection $connection = null, $prefix = '')
+    {
+        $serviceProperties = array($prefix . 'name' => 'name');
+        $realProperties = static::create()->listProperties();
+        sort($realProperties);
+
+        $blacklist = array(
+            'id',
+            'object_name',
+            'object_type',
+            'disabled',
+            'has_agent',
+            'master_should_connect',
+            'accept_config',
+        );
+
+        foreach ($realProperties as $prop) {
+            if (in_array($prop, $blacklist)) {
+                continue;
+            }
+
+            if (substr($prop, -3) === '_id') {
+                $prop = substr($prop, 0, -3);
+            }
+
+            $serviceProperties[$prefix . $prop] = $prop;
+        }
+
+        $serviceVars = array();
+        if ($connection !== null) {
+            foreach ($connection->fetchDistinctServiceVars() as $var) {
+                if ($var->datatype) {
+                    $serviceVars[$prefix . 'vars.' . $var->varname] = sprintf(
+                        '%s (%s)',
+                        $var->varname,
+                        $var->caption
+                    );
+                } else {
+                    $serviceVars[$prefix . 'vars.' . $var->varname] = $var->varname;
+                }
+            }
+        }
+
+        //$properties['vars.*'] = 'Other custom variable';
+        ksort($serviceVars);
+
+
+        $props = mt('director', 'Service properties');
+        $vars  = mt('director', 'Custom variables');
+        $properties = array(
+            $props => $serviceProperties,
+        );
+
+        if (!empty($serviceVars)) {
+            $properties[$vars] = $serviceVars;
+        }
+
+        $properties['Service Groups'] = array ( $prefix . 'groups' => 'servicegroups');
+
+        return $properties;
+    }
+
+ 
     public function getCheckCommand()
     {
         $id = $this->getResolvedProperty('check_command_id');

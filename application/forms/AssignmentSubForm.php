@@ -3,6 +3,7 @@
 namespace Icinga\Module\Director\Forms;
 
 use Icinga\Module\Director\Objects\IcingaHost;
+use Icinga\Module\Director\Objects\IcingaService;
 use Icinga\Module\Director\Objects\IcingaObject;
 use Icinga\Module\Director\Web\Form\QuickSubForm;
 
@@ -27,7 +28,7 @@ class AssignmentSubForm extends QuickSubForm
         $this->addElement('select', 'property', array(
             'label' => $this->translate('Property'),
             'class' => 'assign-property autosubmit',
-            'multiOptions' => $this->optionalEnum(IcingaHost::enumProperties($this->object->getConnection(), 'host.'))
+            'multiOptions' => $this->optionalEnum(IcingaHost::enumProperties($this->object->getConnection(), 'host.')) +  $this->optionalEnum(IcingaService::enumProperties($this->object->getConnection(), 'service.'))
         ));
         $this->addElement('select', 'operator', array(
             'label' => $this->translate('Operator'),

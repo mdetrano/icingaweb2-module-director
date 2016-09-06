@@ -58,7 +58,17 @@ class AssignRenderer
     {
         $column = $filter->getColumn();
         $expression = $filter->getExpression();
-        if ($filter instanceof FilterEqual) {
+
+        if (substr($column,-7) == '.groups') {
+            $op = ( $filter instanceof FilterMatchNot ? '!in' : 'in' );
+            return sprintf(
+                '%s %s %s',
+                $expression,
+                $op,
+                $column
+            );
+
+        } elseif ($filter instanceof FilterEqual) {
             return sprintf(
                 '%s == %s',
                 $column,
