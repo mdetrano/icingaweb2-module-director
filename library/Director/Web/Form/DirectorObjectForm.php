@@ -30,8 +30,6 @@ abstract class DirectorObjectForm extends QuickForm
 
     protected $fieldsDisplayGroup;
 
-    protected $displayGroups = array();
-
     protected $resolvedImports;
 
     protected $listUrl;
@@ -212,22 +210,23 @@ abstract class DirectorObjectForm extends QuickForm
             unset($elements[$k]);
         }
 
-        if (! array_key_exists($group, $this->displayGroups)) {
-            $this->addDisplayGroup($elements, $group, array(
-                'decorators' => array(
-                    'FormElements',
-                    array('HtmlTag', array('tag' => 'dl')),
-                    'Fieldset',
-                ),
-                'order'  => $order,
-                'legend' => $legend ?: $group,
-            ));
-            $this->displayGroups[$group] = $this->getDisplayGroup($group);
-        } else {
-            $this->displayGroups[$group]->addElements($elements);
+        // adding Elements to existing DisplayGroups has problems.  Delete and recreate instead
+        if ( $dg = $this->getDisplayGroup($group)) {
+            $elements = $dg->getElements() + $elements;
+            $this->removeDisplayGroup($group);
         }
 
-        return $this->displayGroups[$group];
+        $this->addDisplayGroup($elements, $group, array(
+            'decorators' => array(
+                'FormElements',
+                array('HtmlTag', array('tag' => 'dl')),
+                'Fieldset',
+            ),
+            'order'  => $order,
+            'legend' => $legend ?: $group,
+        ));
+
+        return $this->getDisplayGroup[$group];
     }
 
     protected function handleProperties(DbObject $object, & $values)
