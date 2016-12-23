@@ -1897,7 +1897,8 @@ abstract class IcingaObject extends DbObject implements IcingaConfigRenderer
     protected function renderCustomVars()
     {
         if ($this->supportsCustomVars()) {
-            return $this->vars()->toConfigString($this->isApplyRule());
+            //return $this->vars()->toConfigString($this->isApplyRule());
+            return $this->vars()->toConfigString();
         } else {
             return '';
         }
