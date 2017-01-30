@@ -9,7 +9,9 @@ class ServicesController extends ObjectsController
     public function init()
     {
         parent::init();
-        $this->view->tabs->remove('objects');
+	if (! $this->getRequest()->isApiRequest()) {
+	        $this->view->tabs->remove('objects');
+	}
     }
 
     public function indexAction()
