@@ -276,8 +276,6 @@ abstract class ObjectsController extends ActionController
         return preg_replace(
             array('/group$/', '/period$/', '/argument$/', '/apiuser$/', '/set$/','/dependencie$/'),
             array('Group', 'Period', 'Argument', 'ApiUser','Set', 'Dependency'),
-            array('/group$/', '/period$/', '/argument$/', '/apiuser$/', '/dependencie$/'),
-            array('Group', 'Period', 'Argument', 'ApiUser', 'Dependency'),
             str_replace(
                 'template',
                 '',
