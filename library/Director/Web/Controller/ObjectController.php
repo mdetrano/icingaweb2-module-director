@@ -245,6 +245,10 @@ abstract class ObjectController extends ActionController
      */
     public function fieldsAction()
     {
+        if ($this->getRequest()->isApiRequest()) {
+            return;
+        }
+
         $this->assertPermission('director/admin');
         $object = $this->requireObject();
         $type = $this->getType();
@@ -362,6 +366,10 @@ abstract class ObjectController extends ActionController
      */
     protected function addActionUsage()
     {
+        if ($this->getRequest()->isApiRequest()) {
+            return;
+        }
+
         $type = $this->getType();
         $object = $this->requireObject();
         if ($object->isTemplate() && $type !== 'serviceSet') {
@@ -689,7 +697,102 @@ abstract class ObjectController extends ActionController
 
     protected function getObjectBaseUrl()
     {
-        return $this->objectBaseUrl ?: 'director/' . strtolower($this->getType());
+	    return $this->objectBaseUrl ?: 'director/' . strtolower($this->getType());
+    }
+    
+    protected function handleFieldsApiRequest() {
+        $request = $this->getRequest();
+        $db = $this->db();
+        $this->requireObject();
+
+        switch ($request->getMethod()) {
+            case 'GET':
+                $r=array('objects' => array());
+                if (!$this->object->supportsFields()) {
+                    $this->sendJson($r);
+                    return;
+                }
+                $fields = $this
+                    ->loadTable('icingaObjectDatafield')
+                    ->setObject($this->object);
+                foreach ($fields->fetchData() as $field) {
+                    $r['objects'][]=array('object_name' => $field->varname, 'object_type' => 'object', 'is_required' => $field->is_required, $this->getType().'_name' => $this->object->object_name);
+                }
+                $this->sendJson($r);
+                return;
+
+            case 'PUT':
+            case 'POST':
+            case 'DELETE':
+                if (!$this->hasFields()) {
+                    $this->getResponse()->setHttpResponseCode(400);
+                    throw new IcingaException('This object does not support fields');
+                    return;
+                }
+
+                $type = $this->getType();
+                $data = json_decode($request->getRawBody());
+
+                if ($data === null) {
+                    $this->getResponse()->setHttpResponseCode(400);
+                    throw new IcingaException(
+                        'Invalid JSON: %s' . $request->getRawBody(),
+                        $this->getLastJsonError()
+                    );
+                } else {
+                    $data = (array) $data;
+                }
+
+                $related_field=null;
+                if (isset($data['object_name'])) {
+                    $query = $this->db()->getDbAdapter()
+                        ->select()
+                        ->from('director_datafield')
+                        ->where('varname = ?', $data['object_name']);
+
+                    $result = DirectorDatafield::loadAll($this->db(), $query);
+                    if (count($result)) {
+                        $related_field=$result[0];
+                        $data['datafield_id']=$related_field->id;
+                    } else {
+                        throw new NotFoundError('Field does not exist: "%s"',$data['object_name']);
+                    }
+                    unset($data['object_name']);
+                } else {
+                     $this->getResponse()->setHttpResponseCode(400);
+                     throw new IcingaException('Must provide an object_name for the datafield');
+                }
+
+                unset($data['object_type']);
+                unset($data[$this->getType().'_name']);
+                $data[$type.'_id']=$this->object->id;
+               
+                $objectField = null;
+                try {
+                    $objectField = IcingaObject::loadByType($type.'Field',$data,$db);
+                    $objectField->setProperties($data);
+                } catch (Exception $e) {
+                    if ($request->getMethod() !== 'DELETE') {
+                        $objectField = IcingaObject::createByType($type.'Field',$data,$db);
+                    } else {
+                        throw $e;
+                    }
+                }
+
+                $response = $this->getResponse();
+
+                if ($request->getMethod() !== 'DELETE') {
+                    $objectField->store();
+                    $response->setHttpResponseCode(200);
+                    $this->sendJson(array('object_name' => $related_field->varname, 'object_type' => 'object', 'is_required' => $objectField->is_required));
+                    return;
+                } else {
+                    $objectField->delete();
+                    $response->setHttpResponseCode(200);
+                    $this->sendJson(array('message' => 'Object Field Deleted'));
+                    return;
+                } 
+        }
     }
 
     protected function hasBasketSupport()
