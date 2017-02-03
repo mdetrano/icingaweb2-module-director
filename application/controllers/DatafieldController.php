@@ -168,7 +168,10 @@ class DatafieldController extends ActionController
 
  
             case 'DELETE':
-                $this->sendJson(array('TODO' => 'Not yet implemented'));
+                $this->requireObject();
+                $this->object->delete();
+                $response->setHttpResponseCode(200);
+                $this->sendJson(array('message' => 'object deleted.'));
                 return;
         }
     }
