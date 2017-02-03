@@ -3,11 +3,9 @@
 namespace Icinga\Module\Director\Controllers;
 
 use Icinga\Module\Director\Web\Controller\ActionController;
-use Icinga\Exception\InvalidPropertyException;
 use Icinga\Module\Director\Objects\DirectorDatafield;
 use Icinga\Exception\NotFoundError;
-use Icinga\Application\Hook;
-
+use Icinga\Exception\IcingaException;
 
 class DatafieldController extends ActionController
 {
@@ -80,8 +78,9 @@ class DatafieldController extends ActionController
 
     protected function loadObject()
     {
+        #Note: assuming varname is unique for API purposes, but this does seem to be enforced by the database
         if (!$this->getRequest()->getParam('name')) {
-            throw new NotFoundError('Must specify name');
+            return;
         }
         $query = $this->db()->getDbAdapter()
             ->select()
@@ -98,6 +97,7 @@ class DatafieldController extends ActionController
 
     protected function handleApiRequest() {
         $request = $this->getRequest();
+        $response = $this->getResponse();
         $db = $this->db();
 
         switch ($request->getMethod()) {
@@ -111,8 +111,62 @@ class DatafieldController extends ActionController
                 }
                 $this->sendJson($props);
                 return;
+
             case 'PUT':
             case 'POST':
+                $data = json_decode($request->getRawBody());
+
+                if ($data === null) {
+                    $this->getResponse()->setHttpResponseCode(400);
+                    throw new IcingaException(
+                        'Invalid JSON: %s' . $request->getRawBody(),
+                        $this->getLastJsonError()
+                    );
+                } else {
+                    $data = (array) $data;
+                }
+                if ($object = $this->object) {
+                    if ($request->getMethod() === 'POST') {
+                        $object->setProperties($data);
+                    } else {
+                        $data = array_merge(
+                            $object->properties,
+                            $data
+                        );
+                        $object->setProperties($data);
+                    }
+                } else {
+                    if (empty($data['varname'])) {
+                        $response->setHttpResponseCode(400);
+                        throw new IcingaException('Must specifiy varname');
+                    }
+
+                    //The API will not allow duplicate varnames
+                    $newname=$data['varname'];
+                    $query = $this->db()->getDbAdapter()
+                        ->select()
+                        ->from('director_datafield')
+                        ->where('varname = ?', $newname);
+
+                    $result = DirectorDatafield::loadAll($this->db(), $query);
+                    if (count($result)) {
+                        throw new IcingaException('Trying to recreate "%s"',$newname);
+                    } 
+
+                    $object = DirectorDatafield::create($data, $db);
+                }
+
+                if ($object->hasBeenModified()) {
+                    $status = $object->hasBeenLoadedFromDb() ? 200 : 201;
+                    $object->store();
+                    $response->setHttpResponseCode($status);
+                } else {
+                    $response->setHttpResponseCode(304);
+                }
+
+                return $this->sendJson($object->properties);
+
+ 
             case 'DELETE':
                 $this->sendJson(array('TODO' => 'Not yet implemented'));
                 return;
