@@ -103,12 +103,7 @@ class DatafieldController extends ActionController
         switch ($request->getMethod()) {
             case 'GET':
                 $this->requireObject();
-                $props=$this->object->properties;
-                foreach(array_keys($props) as $key) {
-                    if (is_null($props[$key]) || $key == 'id') {
-                        unset($props[$key]);
-                    }
-                }
+                $props=$this->restProps($this->object);
                 $this->sendJson($props);
                 return;
 
@@ -125,6 +120,9 @@ class DatafieldController extends ActionController
                 } else {
                     $data = (array) $data;
                 }
+                $data['varname'] = (!empty($data['object_name']) ? $data['object_name'] : null);
+                unset($data['object_name']);
+
                 if ($object = $this->object) {
                     if ($request->getMethod() === 'POST') {
                         $object->setProperties($data);
@@ -138,7 +136,7 @@ class DatafieldController extends ActionController
                 } else {
                     if (empty($data['varname'])) {
                         $response->setHttpResponseCode(400);
-                        throw new IcingaException('Must specifiy varname');
+                        throw new IcingaException('Must specifiy object_name');
                     }
 
                     //The API will not allow duplicate varnames
@@ -164,7 +162,7 @@ class DatafieldController extends ActionController
                     $response->setHttpResponseCode(304);
                 }
 
-                return $this->sendJson($object->properties);
+                return $this->sendJson($this->restProps($object));
 
  
             case 'DELETE':
@@ -187,5 +185,17 @@ class DatafieldController extends ActionController
             }
         }
     }
+
+    protected function restProps($obj) {
+        $props=$obj->properties;
+        $props['object_name']=$props['varname'];
+        foreach(array_keys($props) as $key) {
+            if (is_null($props[$key]) || in_array($key, array('id','varname'))) {
+                unset($props[$key]);
+            }
+        }
+        return($props);
+    }
+
 
 }

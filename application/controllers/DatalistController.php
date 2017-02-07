@@ -95,6 +95,8 @@ class DatalistController extends ActionController
                     unset($data['entries']);
                 }
                 $data['owner']=$this->Auth()->getUser()->getUsername();
+                $data['list_name'] = (!empty($data['object_name']) ? $data['object_name'] : null);
+                unset($data['object_name']);
 
                 if ($object = $this->object) {
                     if (isset($entries)) {
@@ -117,10 +119,16 @@ class DatalistController extends ActionController
                 } else {
                     if (empty($data['list_name'])) {
                         $response->setHttpResponseCode(400);
-                        throw new IcingaException('Must specifiy list_name');
+                        throw new IcingaException('Must specifiy object_name');
                     }
-
                     $object = DirectorDatalist::create($data, $db);
+                }
+                if ($object->hasBeenModified() || $entries_modified) {
+                    $status = $object->hasBeenLoadedFromDb() ? 200 : 201;
+                    $object->store();
+                    $response->setHttpResponseCode($status);
+                } else {
+                    $response->setHttpResponseCode(304);
                 }
 
                 if (isset($entries)) {
@@ -140,13 +148,6 @@ class DatalistController extends ActionController
                     }
                 }
 
-                if ($object->hasBeenModified() || $entries_modified) {
-                    $status = $object->hasBeenLoadedFromDb() ? 200 : 201;
-                    $object->store();
-                    $response->setHttpResponseCode($status);
-                } else {
-                    $response->setHttpResponseCode(304);
-                }
 
                 return $this->sendJson($this->restProps($object));
 
@@ -174,8 +175,9 @@ class DatalistController extends ActionController
 
     protected function restProps($obj) {
         $props=$obj->properties;
+        $props['object_name']=$props['list_name'];
         foreach (array_keys($props) as $key) {
-            if (is_null($props[$key]) || in_array($key,array('id','owner'))) {
+            if (is_null($props[$key]) || in_array($key,array('id','owner','list_name'))) {
                 unset($props[$key]);
             }
         }
