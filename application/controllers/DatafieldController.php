@@ -6,6 +6,7 @@ use Icinga\Module\Director\Web\Controller\ActionController;
 use Icinga\Module\Director\Objects\DirectorDatafield;
 use Icinga\Exception\NotFoundError;
 use Icinga\Exception\IcingaException;
+use Icinga\Module\Director\Objects\DirectorDatalist;
 
 class DatafieldController extends ActionController
 {
@@ -123,6 +124,22 @@ class DatafieldController extends ActionController
                 $data['varname'] = (!empty($data['object_name']) ? $data['object_name'] : null);
                 unset($data['object_name']);
 
+                if (!empty($data['datalist_name'])) {
+                    $query = $this->db()->getDbAdapter()
+                        ->select()
+                        ->from('director_datalist')
+                       ->where('list_name = ?', $data['datalist_name']);
+
+                    $result = DirectorDatalist::loadAll($this->db(), $query);
+                    if (!count($result)) {
+                        $response->setHttpResponseCode(400);
+                        throw new IcingaException('Got invalid datalist_name: '.$data['datalist_name']);
+                    } else {
+                        $datalist = current($result);
+                    }
+                }
+
+
                 if ($object = $this->object) {
                     if ($request->getMethod() === 'POST') {
                         $object->setProperties($data);
@@ -152,6 +169,9 @@ class DatafieldController extends ActionController
                     } 
 
                     $object = DirectorDatafield::create($data, $db);
+                }
+                if (isset($datalist)) {
+                    $object->set('datalist_id', $datalist->id);
                 }
 
                 if ($object->hasBeenModified()) {
@@ -194,6 +214,11 @@ class DatafieldController extends ActionController
                 unset($props[$key]);
             }
         }
+        if ($obj->getSetting('datalist_id')) {
+            $datalist = DirectorDatalist::load($obj->getSetting('datalist_id'),$this->db);
+            $props['datalist_name']=$datalist->list_name;
+        }
+     
         return($props);
     }
 
