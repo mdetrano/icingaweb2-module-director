@@ -86,7 +86,7 @@ class DatalistController extends ActionController
                 }
 
                 $entries=null;
-                $entries_modified=false;
+                $modified=false;
                 if (isset($data['entries'])) {
                     $entries=array();
                     foreach($data['entries'] as $e_key => $e_val) {
@@ -95,26 +95,36 @@ class DatalistController extends ActionController
                     unset($data['entries']);
                 }
                 $data['owner']=$this->Auth()->getUser()->getUsername();
-                $data['list_name'] = (!empty($data['object_name']) ? $data['object_name'] : null);
-                unset($data['object_name']);
+                if (isset($data['object_name'])) {
+                    $data['list_name']=$data['object_name'];
+                    unset($data['object_name']);
+                }
 
                 if ($object = $this->object) {
+                    $old_props = $this->restProps($object);
                     if (isset($entries)) {
-                        if (count($entries) && !count($this->restProps($this->object)['entries'])) {
-                            $entries_modified=true;
+                        if (count($entries) != count($old_props['entries'])) {
+                            $modified=true;
                         }
-                        if (count(array_diff_assoc($this->restProps($this->object)['entries'], $entries))) {
-                            $entries_modified=true;
+                        if (count(array_diff_assoc($old_props['entries'], $entries))) {
+                            $modified=true;
                         }
                     }
                     if ($request->getMethod() === 'POST') {
                         $object->setProperties($data);
                     } else {
-                        $data = array_merge(
-                            $object->properties,
-                            $data
-                        );
-                        $object->setProperties($data);
+                        $data = array_merge(array('list_name' => $object->get('list_name')),$data);
+                        $tmp = DirectorDatalist::create($data, $db);
+                        $replacement = $tmp->getProperties();
+                        unset($replacement['id']);
+                        $object->setProperties($replacement);  
+                        # for a PUT, remove all entries
+                        $table = $this->loadTable('datalistEntry')->setConnection($this->db())->setList($object);
+                        foreach($table->fetchData() as $entry) {
+                            if ($dummy = DirectorDatalistEntry::load(array('list_id' => $object->id, 'entry_name' => $entry->entry_name), $db)) {
+                                $dummy->delete();
+                            }
+                        }
                     }
                 } else {
                     if (empty($data['list_name'])) {
@@ -123,7 +133,7 @@ class DatalistController extends ActionController
                     }
                     $object = DirectorDatalist::create($data, $db);
                 }
-                if ($object->hasBeenModified() || $entries_modified) {
+                if ($object->hasBeenModified() || $modified) {
                     $status = $object->hasBeenLoadedFromDb() ? 200 : 201;
                     $object->store();
                     $response->setHttpResponseCode($status);
@@ -132,22 +142,18 @@ class DatalistController extends ActionController
                 }
 
                 if (isset($entries)) {
-                    # entries are erased and repopulated
-                    $table = $this->loadTable('datalistEntry')->setConnection($this->db())->setList($object);
-                    foreach($table->fetchData() as $entry) {
-                        $dummy = DirectorDatalistEntry::load(array('list_id' => $object->id, 'entry_name' => $entry->entry_name), $db);
-                        if ($dummy) {
-                            $dummy->delete();
+                    foreach($entries as $e_key => $e_val) {
+                        $props=array('entry_name' => $e_key, 'list_id' => $object->id, 'entry_value' => $e_val, 'format' => 'string');
+                        try {
+                            $dummy = DirectorDatalistEntry::load(array('list_id' => $object->id, 'entry_name' => $e_key),$db);
+                            $dummy->setProperties($props);
+                            $dummy->store();
+                        } catch (NotFoundError $e) {
+                            $new_entry=DirectorDatalistEntry::create($props, $db);
+                            $new_entry->store();
                         }
                     }
-
-                    foreach($entries as $e_key => $e_val) {
-                        $props=array('entry_name' => $e_key, 'entry_value' => $e_val, 'list_id' => $object->id, 'format' => 'string');
-                        $new_entry=DirectorDatalistEntry::create($props, $db);
-                        $new_entry->store();
-                    }
                 }
-
 
                 return $this->sendJson($this->restProps($object));
 
