@@ -27,6 +27,7 @@ class DatalistsController extends ActionController
     protected function restProps($obj) {
         $props=$obj->properties;
         $props['object_name']=$props['list_name'];
+        $props['object_type']='template';
         foreach (array_keys($props) as $key) {
             if (is_null($props[$key]) || in_array($key,array('id','owner','list_name'))) {
                 unset($props[$key]);
