@@ -140,8 +140,8 @@ class DatafieldController extends ActionController
                         $datalist = current($result);
                     }
                 }
-                $modified=false;
 
+                $modified=false;
 
                 if ($object = $this->object) {
                     $old_props = $this->restProps($object);
@@ -221,6 +221,7 @@ class DatafieldController extends ActionController
     protected function restProps($obj) {
         $props=$obj->getProperties();
         $props['object_name']=$props['varname'];
+        $props['object_type']='template';
         foreach(array_keys($props) as $key) {
             if (is_null($props[$key]) || in_array($key, array('id','varname'))) {
                 unset($props[$key]);
@@ -230,37 +231,8 @@ class DatafieldController extends ActionController
             $datalist = DirectorDatalist::load($obj->getSetting('datalist_id'),$this->db);
             $props['datalist_name']=$datalist->list_name;
         }
-        $props = array_merge($props, $this->loadObjectsForDatafield($obj->id));
      
         return($props);
     }
-
-    protected function loadObjectsForDatafield($id) {
-        $r=array();
-        foreach(array('command','service','host','user','notification') as $related) {
-
-	        $query = $this->db->select()->from(
-	            array('o' => 'icinga_'.$related),
-	            array(
-	                'object_name'   => 'o.object_name',
-	                'is_required'   => 'f.is_required',
-	            )
-	        )->join(
-	            array('f' => 'icinga_'.$related.'_field'),
-	            'o.id = f.'.$related.'_id',
-	            array()
-	        )->where('f.datafield_id', $id);
-	
-	        $result= $this->db->fetchAll($query);
-	
-	        foreach ($result as $obj) {
-	            $r[$related.'s'][]=array('name' => $obj->object_name, 'is_required' => $obj->is_required);
-	
-	        }
-        }	        
-
-        return($r);
-    }
-
 
 }
