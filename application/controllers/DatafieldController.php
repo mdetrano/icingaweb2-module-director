@@ -140,6 +140,7 @@ class DatafieldController extends ActionController
                         $datalist = current($result);
                     }
                 }
+                unset($data['object_type']);
 
                 $modified=false;
 

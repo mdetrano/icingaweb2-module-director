@@ -99,6 +99,7 @@ class DatalistController extends ActionController
                     $data['list_name']=$data['object_name'];
                     unset($data['object_name']);
                 }
+                unset($data['object_type']);
 
                 if ($object = $this->object) {
                     $old_props = $this->restProps($object);
