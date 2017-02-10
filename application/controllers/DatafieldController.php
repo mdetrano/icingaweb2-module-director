@@ -184,7 +184,11 @@ class DatafieldController extends ActionController
                     $object = DirectorDatafield::create($data, $db);
                 }
                 if (isset($datalist)) {
-                    $object->set('datalist_id', $datalist->id);
+                    if (!preg_match('/DataTypeDatalist$/',$object->get('datatype'))) {
+                        $object->set('datalist_id','');
+                    } else {
+                        $object->set('datalist_id', $datalist->id);
+                    }
                 }
 
                 if ($object->hasBeenModified() || $modified) {
