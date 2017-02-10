@@ -469,7 +469,7 @@ abstract class ObjectController extends ActionController
                     ->loadTable('icingaObjectDatafield')
                     ->setObject($this->object);
                 foreach ($fields->fetchData() as $field) {
-                    $r['objects'][]=array('object_name' => $field->varname, 'object_type' => 'object', 'is_required' => $field->is_required);
+                    $r['objects'][]=array('object_name' => $field->varname, 'object_type' => 'object', 'is_required' => $field->is_required, $this->getType().'_name' => $this->object->object_name);
                 }
                 $this->sendJson($r);
                 return;
@@ -517,6 +517,7 @@ abstract class ObjectController extends ActionController
                 }
 
                 unset($data['object_type']);
+                unset($data[$this->getType().'_name']);
                 $data[$type.'_id']=$this->object->id;
                
                 $objectField = null;
