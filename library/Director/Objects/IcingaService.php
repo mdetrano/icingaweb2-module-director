@@ -274,11 +274,12 @@ class IcingaService extends IcingaObject
             }
 
             return sprintf(
-                "%s %s%s for (config in %s) {\n",
+                "%s %s%s for (config in %s) {\n%s\n",
                 $this->getObjectTypeName(),
                 $this->getType(),
                 $name,
-                $this->get('apply_for')
+                $this->get('apply_for'),
+                'vars.config = config'
             ) . $extraName;
         }
         return parent::renderObjectHeader();
