@@ -272,10 +272,10 @@ abstract class ObjectsController extends ActionController
 
     protected function getType()
     {
-        // Strip final 's' and upcase an eventual 'group'
+        // Strip final 's' and upcase an eventual 'group' or 'set'
         return preg_replace(
-            array('/group$/', '/period$/', '/argument$/', '/apiuser$/', '/dependencie$/'),
-            array('Group', 'Period', 'Argument', 'ApiUser', 'Dependency'),
+            array('/group$/', '/period$/', '/argument$/', '/apiuser$/', '/dependencie$/, '/set$/''),
+            array('Group', 'Period', 'Argument', 'ApiUser', 'Dependency', 'Set'),
             str_replace(
                 'template',
                 '',
