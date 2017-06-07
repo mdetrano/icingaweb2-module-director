@@ -397,7 +397,6 @@ class IcingaService extends IcingaObject
 
         try {
             if ($zoneId = $this->getSingleResolvedProperty('zone_id')) {
-		file_put_contents("/tmp/findme_resoved","DEBUG $zoneId : " . $this->object_name . "\n", FILE_APPEND);
                 $zone = $config->getZoneName($zoneId);
             } else {
                 // if no Zone specified and bound to a host, use host's zone
