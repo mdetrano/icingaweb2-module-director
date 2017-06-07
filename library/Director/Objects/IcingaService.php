@@ -395,11 +395,21 @@ class IcingaService extends IcingaObject
 
         $zone = parent::getRenderingZone($config);
 
-        // if bound to a host, and zone is fallback to master
-        if ($this->host_id !== null && $zone === $this->connection->getMasterZoneName()) {
-            /** @var IcingaHost $host */
-            $host = $this->getRelatedObject('host', $this->host_id);
-            return $host->getRenderingZone($config);
+        try {
+            if ($zoneId = $this->getSingleResolvedProperty('zone_id')) {
+		file_put_contents("/tmp/findme_resoved","DEBUG $zoneId : " . $this->object_name . "\n", FILE_APPEND);
+                $zone = $config->getZoneName($zoneId);
+            } else {
+                // if no Zone specified and bound to a host, use host's zone
+                if ($this->host_id !== null) {
+                    /** @var IcingaHost $host */
+                    $host = $this->getRelatedObject('host', $this->host_id);
+                    $zone = $host->getRenderingZone($config);
+                }
+
+            }
+        } catch (Exception $e) {
+            
         }
         return $zone;
     }
