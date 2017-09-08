@@ -61,8 +61,8 @@ class ExtensibleSet
     {
         if (null === $set) {
             $this->reset();
-            return $this;
 
+            return $this;
         } elseif (is_array($set) || is_string($set)) {
             $this->reset();
             $this->override($set);
@@ -438,6 +438,10 @@ class ExtensibleSet
             throw new ProgrammingError(
                 'No allowed value set available, this set is not restricted'
             );
+        }
+
+        if (empty($this->allowedValues)) {
+            return array();
         }
 
         return array_combine($this->allowedValues, $this->allowedValues);

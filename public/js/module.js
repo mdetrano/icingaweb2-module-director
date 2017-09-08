@@ -25,14 +25,38 @@
             // this.module.on('click', 'div.controls ul.tabs a', this.detailTabClick);
             this.module.on('click', 'input.related-action', this.extensibleSetAction);
             this.module.on('focus', 'form input, form textarea, form select', this.formElementFocus);
-            this.module.icinga.logger.debug('Director module initialized');
             this.module.on('keyup', '.director-suggest', this.autoSuggest);
             this.module.on('keydown', '.director-suggest', this.suggestionKeyDown);
             this.module.on('dblclick', '.director-suggest', this.suggestionDoubleClick);
             this.module.on('focus', '.director-suggest', this.enterSuggestionField);
             this.module.on('focusout', '.director-suggest', this.leaveSuggestionField);
             this.module.on('click', '.director-suggestions li', this.clickSuggestion);
+            this.module.on('dblclick', 'ul.tabs a', this.tabWantsFullscreen);
             this.module.on('change', 'form input.autosubmit, form select.autosubmit', this.setAutoSubmitted);
+            this.module.icinga.logger.debug('Director module initialized');
+        },
+
+        tabWantsFullscreen: function(ev) {
+            var icinga = this.module.icinga;
+            var $a, $container, id;
+
+            if (icinga.ui.isOneColLayout()) {
+                return;
+            }
+
+            $a = $(ev.currentTarget);
+            $container = $a.closest('.container');
+            id = $container.attr('id');
+
+            icinga.loader.stopPendingRequestsFor($container);
+            if (id === 'col2') {
+                icinga.ui.moveToLeft();
+            }
+
+            icinga.ui.layout1col();
+            icinga.history.pushCurrentState();
+            ev.preventDefault();
+            ev.stopPropagation();
         },
 
         /**
@@ -103,7 +127,7 @@
         suggestionDoubleClick: function (ev)
         {
             var $el = $(ev.currentTarget);
-            this.getSuggestionList($el)
+            this.getSuggestionList($el);
         },
 
         /**
@@ -234,6 +258,7 @@
             } else {
                 $ul = $('<ul class="director-suggestions"></ul>');
                 $ul.insertAfter($input);
+                $ul.css({width: $input.css('width')});
                 return this.refreshSuggestionList($ul, $input);
             }
         },
@@ -335,6 +360,7 @@
          * @param ev
          */
         enterSuggestionField: function(ev) {
+            return;
             var $el = $(ev.currentTarget);
             if ($el.val() === '' || $el.val().match(/\.$/)) {
                 this.getSuggestionList($el)
@@ -347,7 +373,7 @@
          * @param ev
          */
         leaveSuggestionField: function(ev) {
-            return;
+//            return;
             var _this = this;
             setTimeout(function() {
                 _this.removeSuggestionList($(ev.currentTarget));
@@ -524,6 +550,14 @@
             if ($input.closest('form.editor').length) {
                return;
             }
+            var $set = $input.closest('.extensible-set');
+            if ($set.length) {
+                var $textInputs = $('input[type=text]', $set);
+                if ($textInputs.length > 1) {
+                    $textInputs.not(':first').attr('tabIndex', '-1');
+                }
+            }
+
             var $dd = $input.closest('dd');
             $dd.find('p.description').show();
             if ($dd.attr('id') && $dd.attr('id').match(/button/)) {
@@ -533,23 +567,19 @@
             var $dt = $dd.prev();
             var $form = $dd.closest('form');
 
+            var $desc = $dd.find('p.description');
+            if ($desc.length) {
+                $form.css({ marginBottom: ($desc.height() + 48) + 'px' });
+            }
+
             $form.find('dt, dd, li').removeClass('active');
             $li.addClass('active');
             $dt.addClass('active');
             $dd.addClass('active');
-            $dd.find('p.description.fading-out')
-                .stop(true)
-                .removeClass('fading-out')
-                .fadeIn('fast');
 
             $form.find('dd').not($dd)
                 .find('p.description')
-                .not('.fading-out')
-                .addClass('fading-out')
-                .delay(2000)
-                .fadeOut('slow', function() {
-                    $(this).removeClass('fading-out').hide()
-                });
+                .hide();
         },
 
         highlightFormErrors: function($container)
@@ -626,16 +656,42 @@
             this.highlightFormErrors($container);
             this.scrollHighlightIntoView($container);
             this.scrollActiveRowIntoView($container);
+            this.highlightActiveDashlet($container);
             this.hideInactiveFormDescriptions($container);
             if (iid = $container.data('activeExtensibleEntry')) {
                 $('#' + iid).focus();
                 $container.removeData('activeExtensibleEntry');
             }
-
             // Disabled for now
             // this.alignDetailLinks();
             if (! this.containerIsAutorefreshed($container) && ! this.containerIsAutoSubmitted($container)) {
                 this.putFocusOnFirstFormElement($container);
+            }
+        },
+
+        highlightActiveDashlet: function($container)
+        {
+            if (this.module.icinga.ui.isOneColLayout()) {
+                return;
+            }
+
+            var url, $actions, $match;
+            var id = $container.attr('id');
+            if (id === 'col1') {
+                url = $('#col2').data('icingaUrl');
+                $actions = $('.main-actions', $container);
+            } else if (id === 'col2') {
+                url = $container.data('icingaUrl');
+                $actions = $('.main-actions', $('#col1'));
+            }
+            if (! $actions.length) {
+                return;
+            }
+
+            $match = $('li a[href*="' + url + '"]', $actions);
+            if ($match.length) {
+                $('li a.active', $actions).removeClass('active');
+                $match.first().addClass('active');
             }
         },
 
@@ -693,7 +749,7 @@
                 if ($fieldset.attr('id') === 'fieldset-assign') {
                     return;
                 }
-                if ($fieldset.find('.required').length == 0 && (! self.fieldsetWasOpened($fieldset))) {
+                if ($fieldset.find('.required').length === 0 && (! self.fieldsetWasOpened($fieldset))) {
                     $fieldset.addClass('collapsed');
                     self.fixFieldsetInfo($fieldset);
                 }
@@ -716,7 +772,9 @@
             if ($fieldset.hasClass('collapsed')) {
                 if ($fieldset.find('legend span.element-count').length === 0) {
                     var cnt = $fieldset.find('dt, li').not('.extensible-set li').length;
-                    $fieldset.find('legend').append($('<span class="element-count"> (' + cnt + ')</span>'));
+                    if (cnt > 0) {
+                        $fieldset.find('legend').append($('<span class="element-count"> (' + cnt + ')</span>'));
+                    }
                 }
             } else {
                 $fieldset.find('legend span.element-count').remove();

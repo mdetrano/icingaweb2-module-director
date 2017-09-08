@@ -2,6 +2,7 @@
 
 namespace Icinga\Module\Director\Forms;
 
+use Icinga\Data\Filter\Filter;
 use Icinga\Module\Director\Data\PropertiesFilter\ArrayCustomVariablesFilter;
 use Icinga\Module\Director\Exception\NestingError;
 use Icinga\Module\Director\Web\Form\DirectorObjectForm;
@@ -21,13 +22,13 @@ class IcingaServiceForm extends DirectorObjectForm
     /** @var IcingaService */
     protected $object;
 
-    private $hostGenerated = false;
+    private $applyGenerated;
 
     private $inheritedFrom;
 
-    public function setHostGenerated($hostGenerated = true)
+    public function setApplyGenerated(IcingaService $applyGenerated)
     {
-        $this->hostGenerated = $hostGenerated;
+        $this->applyGenerated = $applyGenerated;
         return $this;
     }
 
@@ -39,18 +40,12 @@ class IcingaServiceForm extends DirectorObjectForm
 
     public function setup()
     {
-        if ($this->object && $this->object->usesVarOverrides()) {
-            $this->setupForVarOverrides();
+        if ($this->providesOverrides()) {
             return;
         }
 
-        if ($this->hostGenerated) {
-            $this->setupHostGenerated();
-            return;
-        }
-
-        if ($this->inheritedFrom) {
-            $this->setupInherited();
+        if ($this->host && $this->set) {
+            $this->setupOnHostForSet();
             return;
         }
 
@@ -71,11 +66,51 @@ class IcingaServiceForm extends DirectorObjectForm
         }
     }
 
+    protected function providesOverrides()
+    {
+        return  $this->applyGenerated
+            || $this->inheritedFrom
+            || ($this->host && $this->set)
+            || ($this->object && $this->object->usesVarOverrides());
+    }
+
+    protected function onAddedFields()
+    {
+        if (! $this->providesOverrides()) {
+            return;
+        }
+
+        $this->addHtmlHint(
+            $this->getOverrideHint(),
+            array('name' => 'inheritance_hint')
+        );
+
+        $group = $this->getDisplayGroup('custom_fields');
+
+        if ($group) {
+            $elements = $group->getElements();
+            $group->setElements(array($this->getElement('inheritance_hint')));
+            $group->addElements($elements);
+            $this->setSubmitLabel(
+                $this->translate('Override vars')
+            );
+        } else {
+            $this->addElementsToGroup(
+                array('inheritance_hint'),
+                'custom_fields',
+                20,
+                $this->translate('Hints regarding this service')
+            );
+
+            $this->setSubmitLabel(false);
+        }
+    }
+
     public function createApplyRuleFor(IcingaService $service)
     {
         $this->apply = $service;
         $object = $this->object();
-        $object->imports = $service->object_name;
+        $object->set('imports', $service->getObjectName());
         $object->object_type = 'apply';
         $object->object_name = $service->object_name;
         return $this;
@@ -85,6 +120,8 @@ class IcingaServiceForm extends DirectorObjectForm
     {
         if ($this->object) {
             $this->addHidden('object_type', $this->object->object_type);
+        } elseif ($this->preferredObjectType) {
+            $this->addHidden('object_type', $this->preferredObjectType);
         } else {
             $this->addHidden('object_type', 'template');
         }
@@ -92,6 +129,7 @@ class IcingaServiceForm extends DirectorObjectForm
         $this->addNameElement()
              ->addHostObjectElement()
              ->addImportsElement()
+             ->addChoices('service')
              ->addGroupsElement()
              ->addDisabledElement()
              ->addApplyForElement()
@@ -104,48 +142,72 @@ class IcingaServiceForm extends DirectorObjectForm
              ->setButtons();
     }
 
-    protected function setupForVarOverrides()
+    protected function getOverrideHint()
     {
-        $msg = $this->translate(
-            'This service has been generated in an automated way, but still'
-            . ' allows you to override the following properties in a safe way.'
-        );
+        $view = $this->getView();
 
-        $this->addHtmlHint($msg);
-        $this->setButtons();
+        if ($this->object && $this->object->usesVarOverrides()) {
+            return $this->translate(
+                'This service has been generated in an automated way, but still'
+                . ' allows you to override the following properties in a safe way.'
+            );
+        }
+
+        if ($this->applyGenerated) {
+            return $view->escape(sprintf(
+                $this->translate(
+                    'This service has been generated using an apply rule, assigned where %s'
+                ),
+                Filter::fromQueryString($this->applyGenerated->assign_filter)
+            ));
+        }
+
+        if ($this->host && $this->set) {
+            return $this->translate(
+                'This service belongs to a Service Set. Still, you might want'
+                . ' to override the following properties for this host only.'
+            );
+        }
+
+        if ($this->inheritedFrom) {
+            $msg = $view->escape($this->translate(
+                'This service has been inherited from %s. Still, you might want'
+                . ' to change the following properties for this host only.'
+            ));
+
+            $name = $this->inheritedFrom;
+            $link = $view->qlink(
+                $name,
+                'director/service',
+                array(
+                    'host' => $name,
+                    'name' => $this->object->object_name,
+                ),
+                array('data-base-target' => '_next')
+            );
+
+            return sprintf($msg, $link);
+        }
+
         $this->setSubmitLabel(
             $this->translate('Override vars')
         );
     }
 
-    protected function setupHostGenerated()
-    {
-        $msg = $this->translate(
-            'This service has been generated from host properties.'
-        );
-
-        $this->addHtmlHint($msg);
-
-        $this->setSubmitLabel(
-            $this->translate('Override vars')
-        );
-    }
-
-    protected function setupInherited()
+    protected function setupOnHostForSet()
     {
         $view = $this->getView();
         $msg = $view->escape($this->translate(
-            'This service has been inherited from %s. Still, you might want'
+            'This service belongs to the service set "%s". Still, you might want'
             . ' to change the following properties for this host only.'
         ));
 
-        $name = $this->inheritedFrom;
+        $name = $this->set->getObjectName();
         $link = $view->qlink(
             $name,
-            'director/service',
+            'director/serviceset',
             array(
-                'host' => $name,
-                'name' => $this->object->object_name,
+                'name' => $name,
             ),
             array('data-base-target' => '_next')
         );
@@ -213,6 +275,10 @@ class IcingaServiceForm extends DirectorObjectForm
         }
     }
 
+    /**
+     * @param IcingaHost $host
+     * @return $this
+     */
     public function setHost(IcingaHost $host)
     {
         $this->host = $host;
@@ -308,8 +374,8 @@ class IcingaServiceForm extends DirectorObjectForm
                     'NOTE: only custom variables of type "Array" are eligible.'
                 )
             ));
-
         }
+
         return $this;
     }
 
@@ -399,7 +465,7 @@ class IcingaServiceForm extends DirectorObjectForm
         }
 
         $host = $this->host;
-        $serviceName = $this->object->object_name;
+        $serviceName = $this->object->getObjectName();
 
         $this->host->overrideServiceVars($serviceName, (object) $vars);
 
@@ -408,7 +474,7 @@ class IcingaServiceForm extends DirectorObjectForm
                 empty($vars)
                 ? $this->translate('All overrides have been removed from "%s"')
                 : $this->translate('The given properties have been stored for "%s"'),
-                $this->translate($host->object_name)
+                $this->translate($host->getObjectName())
             );
 
             $host->store();
@@ -425,7 +491,7 @@ class IcingaServiceForm extends DirectorObjectForm
 
     public function onSuccess()
     {
-        if ($this->hostGenerated || $this->inheritedFrom || $this->object->usesVarOverrides()) {
+        if ($this->providesOverrides()) {
             return $this->succeedForOverrides();
         }
 

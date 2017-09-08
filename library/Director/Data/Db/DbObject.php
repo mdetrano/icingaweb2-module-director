@@ -1,15 +1,10 @@
 <?php
 
-/**
- * This file ...
- *
- * @copyright  Icinga Team <team@icinga.org>
- * @license  GPLv2 http://www.gnu.org/licenses/gpl-2.0.html
- */
 namespace Icinga\Module\Director\Data\Db;
 
 use Icinga\Exception\IcingaException as IE;
 use Icinga\Exception\NotFoundError;
+use Icinga\Module\Director\Db;
 use Icinga\Module\Director\Exception\DuplicateKeyException;
 use Icinga\Module\Director\Util;
 use Exception;
@@ -249,16 +244,32 @@ abstract class DbObject
             return $this->$func();
         }
 
-        if (! array_key_exists($property, $this->properties)) {
-            throw new IE('Trying to get invalid property "%s"', $property);
-        }
+        $this->assertPropertyExists($property);
         return $this->properties[$property];
+    }
+
+    public function getProperty($key)
+    {
+        $this->assertPropertyExists($key);
+        return $this->properties[$key];
+    }
+
+    protected function assertPropertyExists($key)
+    {
+        if (! array_key_exists($key, $this->properties)) {
+            throw new IE('Trying to get invalid property "%s"', $key);
+        }
+
+        return $this;
     }
 
     public function hasProperty($key)
     {
         if (array_key_exists($key, $this->properties)) {
             return true;
+        } elseif ($key === 'id') {
+            // There is getId, would give false positive
+            return false;
         }
         $func = 'get' . ucfirst($key);
         if (substr($func, -2) === '[]') {
@@ -533,12 +544,12 @@ abstract class DbObject
     /**
      * Get the autoinc value if set
      *
-     * @return string
+     * @return int
      */
     public function getAutoincId()
     {
         if (isset($this->properties[$this->autoincKeyName])) {
-            return $this->properties[$this->autoincKeyName];
+            return (int) $this->properties[$this->autoincKeyName];
         }
         return null;
     }
@@ -585,7 +596,6 @@ abstract class DbObject
         $properties = $this->db->fetchRow($select);
 
         if (empty($properties)) {
-
             if (is_array($this->getKeyName())) {
                 throw new NotFoundError(
                     'Failed to load %s for %s',
@@ -602,6 +612,18 @@ abstract class DbObject
         }
 
         return $this->setDbProperties($properties);
+    }
+
+    /**
+     * @param object $row
+     * @param Db $db
+     * @return self
+     */
+    public static function fromDbRow($row, Db $db)
+    {
+        return (new static())
+            ->setConnection($db)
+            ->setDbProperties($row);
     }
 
     protected function setDbProperties($properties)
@@ -636,6 +658,16 @@ abstract class DbObject
         return $this->loadedProperties;
     }
 
+    public function getOriginalProperty($key)
+    {
+        $this->assertPropertyExists($key);
+        if ($this->hasBeenLoadedFromDb()) {
+            return $this->loadedProperties[$key];
+        }
+
+        return null;
+    }
+
     public function hasBeenLoadedFromDb()
     {
         return $this->loadedFromDb;
@@ -660,7 +692,6 @@ abstract class DbObject
             $properties,
             $this->createWhere()
         );
-
     }
 
     /**
@@ -755,7 +786,6 @@ abstract class DbObject
                     );
                 }
             }
-
         } catch (Exception $e) {
             if ($e instanceof IE) {
                 throw $e;
@@ -827,7 +857,7 @@ abstract class DbObject
         return $result !== false;
     }
 
-    protected function createWhere()
+    public function createWhere()
     {
         if ($id = $this->getAutoincId()) {
             return $this->db->quoteInto(
@@ -1007,7 +1037,6 @@ abstract class DbObject
                 self::$prefetchStats[$class]->miss++;
                 return false;
             }
-
         } else {
             self::$prefetchStats[$class]->miss++;
             return false;
@@ -1021,6 +1050,14 @@ abstract class DbObject
 
     public static function loadWithAutoIncId($id, DbConnection $connection)
     {
+        /* Need to cast to int, otherwise the id will be matched against
+         * object_name, which may wreak havoc if an object has a
+         * object_name matching some id. Note that DbObject::set() and
+         * DbObject::setDbProperties() will convert any property to
+         * string, including ids.
+         */
+        $id = (int) $id;
+
         if ($prefetched = static::getPrefetched($id)) {
             return $prefetched;
         }
@@ -1050,7 +1087,7 @@ abstract class DbObject
      * @param \Zend_Db_Select $query
      * @param string|null $keyColumn
      *
-     * @return self[]
+     * @return static[]
      */
     public static function loadAll(DbConnection $connection, $query = null, $keyColumn = null)
     {

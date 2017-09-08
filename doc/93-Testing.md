@@ -1,9 +1,8 @@
-Running Unit-Tests for the Director
-===================================
+<a id="Testing"></a>Running Unit-Tests for the Director
+=======================================================
 
 There are basically multiple ways of running our Unit-Tests. All of them
 are explained here.
-
 
 Let others do the job
 ---------------------
@@ -12,6 +11,26 @@ Well, as there are tests available you might come to the conclusion that
 there is probably already someone running them from time to time. So, just
 lean back with full trust in our development toolchain and spend your time
 elsewhere ;-) Cheers!
+
+### Tests on Travis-CI
+
+When pushing to [GitHub](https://github.com/Icinga/icingaweb2-module-director/)
+or sending pull requests, Unit-Tests are automatically triggered on
+[Travis-CI](https://travis-ci.org/Icinga/icingaweb2-module-director):
+
+[![Build Status](https://travis-ci.org/Icinga/icingaweb2-module-director.svg?branch=master)](https://travis-ci.org/Icinga/icingaweb2-module-director)
+
+We run our tests against MySQL and PostgreSQL, with PHP versions ranging from
+5.3 to 7.1, including nightly builds.
+
+### Tests for supported Platforms
+
+As far as we know, Director is currently mostly used on CentOS (or RHEL)
+versions 6 and 7, Debian Stable (Jessie) and Ubuntu LTS (Xenial). So we are
+running our tests on our own platforms for exactly those systems. All of them
+with PostgreSQL, MySQL (or MariaDB).
+
+This way we reach the mostly used Database and PHP versions:
 
 ![Test result](screenshot/director/93_testing/931_director_testing_duration.png)
 
@@ -156,7 +175,7 @@ sed -i'' 's/repo_gpgcheck=1/repo_gpgcheck=0/' /etc/yum.repos.d/runner_gitlab-ci-
 
 # Package installation
 yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-yum install -y https://packages.icinga.org/epel/7/release/noarch/icinga-rpm-release-7-1.el7.centos.noarch.rpm
+yum install -y https://packages.icinga.com/epel/7/release/noarch/icinga-rpm-release-7-1.el7.centos.noarch.rpm
 yum install -y php-Icinga icingaweb2-common phpunit mariadb-server postgresql-server \
   postgresql-contrib gitlab-ci-multi-runner
 
@@ -198,7 +217,7 @@ curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-ci-multi-
 
 # Package installation
 yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-6.noarch.rpm
-yum install -y https://packages.icinga.org/epel/6/release/noarch/icinga-rpm-release-6-1.el6.noarch.rpm
+yum install -y https://packages.icinga.com/epel/6/release/noarch/icinga-rpm-release-6-1.el6.noarch.rpm
 yum install -y php-Icinga icingaweb2-common phpunit mysql-server gitlab-ci-multi-runner
 
 # Start and enable MySQL
@@ -221,8 +240,8 @@ gitlab-ci-multi-runner register -n \
 # Package installation
 apt-get update -q -q
 apt-get install -y -q wget curl
-wget -q -O - http://packages.icinga.org/icinga.key | apt-key add -
-echo 'deb http://packages.icinga.org/debian icinga-jessie main' > /etc/apt/sources.list.d/icinga.list
+wget -q -O - http://packages.icinga.com/icinga.key | apt-key add -
+echo 'deb http://packages.icinga.com/debian icinga-jessie main' > /etc/apt/sources.list.d/icinga.list
 curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-ci-multi-runner/script.deb.sh | bash
 apt-get update -q -q
 DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -q -y \
@@ -247,8 +266,8 @@ gitlab-ci-multi-runner register -n \
 # Package installation
 apt-get update -q -q
 apt-get install -y -q wget curl
-wget -q -O - http://packages.icinga.org/icinga.key | apt-key add -
-echo 'deb http://packages.icinga.org/ubuntu icinga-xenial main' > /etc/apt/sources.list.d/icinga.list
+wget -q -O - http://packages.icinga.com/icinga.key | apt-key add -
+echo 'deb http://packages.icinga.com/ubuntu icinga-xenial main' > /etc/apt/sources.list.d/icinga.list
 curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-ci-multi-runner/script.deb.sh | bash
 apt-get update -q -q
 DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -q -y \

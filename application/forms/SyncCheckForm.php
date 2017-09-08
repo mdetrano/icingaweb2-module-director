@@ -1,12 +1,11 @@
 <?php
 
-// TODO: Check whether this can be removed
 namespace Icinga\Module\Director\Forms;
 
 use Icinga\Module\Director\Objects\SyncRule;
-use Icinga\Module\Director\Web\Form\QuickForm;
+use Icinga\Module\Director\Web\Form\DirectorForm;
 
-class SyncCheckForm extends QuickForm
+class SyncCheckForm extends DirectorForm
 {
     /** @var SyncRule */
     protected $rule;
@@ -62,6 +61,5 @@ class SyncCheckForm extends QuickForm
         } else {
             $this->addError($this->translate('Checking this sync rule failed'));
         }
-
     }
 }

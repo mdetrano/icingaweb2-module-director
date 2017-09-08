@@ -4,10 +4,12 @@ namespace Icinga\Module\Director\Objects;
 
 use Countable;
 use Exception;
+use Icinga\Exception\ProgrammingError;
 use Iterator;
 use Icinga\Module\Director\IcingaConfig\IcingaConfigHelper as c;
 use Icinga\Module\Director\IcingaConfig\IcingaConfigRenderer;
 use Icinga\Module\Director\IcingaConfig\IcingaLegacyConfigHelper as c1;
+use Icinga\Module\Director\Repository\IcingaTemplateRepository;
 
 class IcingaObjectImports implements Iterator, Countable, IcingaConfigRenderer
 {
@@ -118,8 +120,8 @@ class IcingaObjectImports implements Iterator, Countable, IcingaConfigRenderer
     {
         $list = array();
         $class = $this->getImportClass();
-        foreach ($imports as $i) {
 
+        foreach ($imports as $i) {
             if ($i instanceof $class) {
                 $list[] = $i->object_name;
             } else {
@@ -168,7 +170,7 @@ class IcingaObjectImports implements Iterator, Countable, IcingaConfigRenderer
     protected function refreshIndex()
     {
         $this->idx = array_keys($this->imports);
-        $this->object->templateResolver()->refreshObject($this->object);
+        // $this->object->templateResolver()->refreshObject($this->object);
         return $this;
     }
 
@@ -270,8 +272,10 @@ class IcingaObjectImports implements Iterator, Countable, IcingaConfigRenderer
 
     protected function loadFromDb()
     {
-        $resolver = $this->object->templateResolver();
-        $this->objects = $resolver->fetchParents();
+        // $resolver = $this->object->templateResolver();
+        // $this->objects = $resolver->fetchParents();
+        $this->objects = IcingaTemplateRepository::instanceByObject($this->object)
+            ->getTemplatesIndexedByNameFor($this->object);
         if (empty($this->objects)) {
             $this->imports = array();
         } else {
@@ -289,7 +293,15 @@ class IcingaObjectImports implements Iterator, Countable, IcingaConfigRenderer
             return true;
         }
 
-        $objectId = (int) $this->object->get('id');
+        $objectId = $this->object->get('id');
+        if ($objectId === null) {
+            throw new ProgrammingError(
+                'Cannot store imports for unstored object with no ID'
+            );
+        } else {
+            $objectId = (int) $objectId;
+        }
+
         $type = $this->getType();
 
         $objectCol = $type . '_id';

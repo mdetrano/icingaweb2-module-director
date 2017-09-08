@@ -27,6 +27,7 @@ class SyncRule extends DbObject
         'sync_state'         => 'unknown',
         'last_error_message' => null,
         'last_attempt'       => null,
+        'description'        => null,
     );
 
     private $sync;
@@ -110,22 +111,6 @@ class SyncRule extends DbObject
         return $db->fetchOne($query);
     }
 
-    public function getPriorityForNextProperty()
-    {
-        if (! $this->hasBeenLoadedFromDb()) {
-            return 1;
-        }
-        
-        $db = $this->getDb();
-        return $db->fetchOne(
-            $db->select()
-                ->from(
-                    array('p' => 'sync_property'),
-                    array('priority' => '(CASE WHEN MAX(p.priority) IS NULL THEN 1 ELSE MAX(p.priority) + 1 END)')
-                )->where('p.rule_id = ?', $this->get('id'))
-        );
-    }
-
     public function matches($row)
     {
         if ($this->get('filter_expression') === null) {
@@ -154,7 +139,6 @@ class SyncRule extends DbObject
                 }
 
                 $hadChanges = true;
-
             } else {
                 Benchmark::measure('No modifications for sync rule ' . $this->get('rule_name'));
                 $this->set('sync_state', 'in-sync');
@@ -255,7 +239,6 @@ class SyncRule extends DbObject
     public function hasCombinedKey()
     {
         if ($this->hasCombinedKey === null) {
-
             $this->hasCombinedKey = false;
 
             // TODO: Move to Objects
@@ -341,11 +324,16 @@ class SyncRule extends DbObject
 
                     $this->destinationKeyPattern = '${list_id}!${entry_name}';
                 }
-
             }
         }
 
         return $this->hasCombinedKey;
+    }
+
+    public function hasSyncProperties()
+    {
+        $properties = $this->getSyncProperties();
+        return ! empty($properties);
     }
 
     public function getSyncProperties()
@@ -370,7 +358,7 @@ class SyncRule extends DbObject
             $db->select()
                ->from('sync_property')
                ->where('rule_id = ?', $this->get('id'))
-               ->order('priority DESC')
+               ->order('priority ASC')
         );
     }
 }

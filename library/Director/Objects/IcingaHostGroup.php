@@ -11,6 +11,9 @@ class IcingaHostGroup extends IcingaObjectGroup
 {
     protected $table = 'icinga_hostgroup';
 
+    /** @var HostGroupMembershipResolver */
+    protected $hostgroupMembershipResolver;
+
     public function supportsAssignments()
     {
         return true;
@@ -23,6 +26,32 @@ class IcingaHostGroup extends IcingaObjectGroup
         } else {
             parent::renderToLegacyConfig($config);
         }
+    }
+
+    protected function getHostGroupMembershipResolver()
+    {
+        if ($this->hostgroupMembershipResolver === null) {
+            $this->hostgroupMembershipResolver = new HostGroupMembershipResolver(
+                $this->getConnection()
+            );
+        }
+
+        return $this->hostgroupMembershipResolver;
+    }
+
+    public function setHostGroupMembershipResolver(HostGroupMembershipResolver $resolver)
+    {
+        $this->hostgroupMembershipResolver = $resolver;
+        return $this;
+    }
+
+    protected function notifyResolvers()
+    {
+        $resolver = $this->getHostGroupMembershipResolver();
+        $resolver->addGroup($this);
+        $resolver->refreshDb();
+
+        return $this;
     }
 
     /**
@@ -55,7 +84,6 @@ class IcingaHostGroup extends IcingaObjectGroup
             $file = $this->legacyZoneHostgroupFile($config);
             $this->properties['members'] = array();
             $file->addLegacyObject($this);
-
         } else {
             $allMembers = array();
 
@@ -80,7 +108,7 @@ class IcingaHostGroup extends IcingaObjectGroup
                 $this->properties['members'] = $allMembers;
                 $this->legacyZoneHostgroupFile($config, 0)
                     ->addLegacyObject($this);
-            } else if ($deploymentMode == 'masterless') {
+            } elseif ($deploymentMode == 'masterless') {
                 // nothing to add
             } else {
                 throw new ProgrammingError('Unsupported deployment mode: %s' . $deploymentMode);
@@ -96,7 +124,8 @@ class IcingaHostGroup extends IcingaObjectGroup
             $zone = $this->connection->getDefaultGlobalZoneName();
         }
         return $config->configFile(
-            'director/' . $zone . '/hostgroups', '.cfg'
+            'director/' . $zone . '/hostgroups',
+            '.cfg'
         );
     }
 
@@ -112,9 +141,12 @@ class IcingaHostGroup extends IcingaObjectGroup
      * Note: rendered with renderLegacyMembers()
      *
      * @return string
+     *
+     * @codingStandardsIgnoreStart
      */
     protected function renderLegacyAssign_filter()
     {
+        // @codingStandardsIgnoreEnd
         return '';
     }
 }

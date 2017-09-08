@@ -2,6 +2,7 @@
 
 namespace Icinga\Module\Director\IcingaConfig;
 
+use Icinga\Application\Icinga;
 use Icinga\Exception\ProgrammingError;
 use Icinga\Module\Director\Objects\IcingaEndpoint;
 use Icinga\Module\Director\Objects\IcingaHost;
@@ -22,14 +23,17 @@ class AgentWizard
 
     public function __construct(IcingaHost $host)
     {
-        if ($host->getResolvedProperty('has_agent') !== 'y') {
+        $this->host = $host;
+    }
+
+    protected function assertAgent()
+    {
+        if ($this->host->getResolvedProperty('has_agent') !== 'y') {
             throw new ProgrammingError(
                 'The given host "%s" is not an Agent',
-                $host->getObjectName()
+                $this->host->getObjectName()
             );
         }
-
-        $this->host = $host;
     }
 
     protected function getCaServer()
@@ -134,26 +138,64 @@ class AgentWizard
     {
         return $this->loadPowershellModule()
             . "\n\n"
-            . '$icinga = Icinga2AgentModule `' . "\n    "
-            . $this->renderPowershellParameters(
-                array(
-                    'AgentName'       => $this->getCertName(),
-                    'Ticket'          => $this->getTicket(),
-                    'ParentZone'      => $this->getParentZone()->getObjectName(),
-                    'ParentEndpoints' => array_keys($this->getParentEndpoints()),
-                    'CAServer'        => $this->getCaServer(),
-                )
-            )
-            . "\n\n" . '$icinga.installIcinga2Agent()' . "\n";
+            . 'exit Icinga2AgentModule `' . "\n    "
+            . $this->renderPowershellParameters([
+                'AgentName'       => $this->getCertName(),
+                'Ticket'          => $this->getTicket(),
+                'ParentZone'      => $this->getParentZone()->getObjectName(),
+                'ParentEndpoints' => array_keys($this->getParentEndpoints()),
+                'CAServer'        => $this->getCaServer(),
+                'RunInstaller'
+            ]);
+    }
+
+    public function renderTokenBasedWindowsInstaller($token, $withModule = false)
+    {
+        if ($withModule) {
+            $script = $this->loadPowershellModule() . "\n\n";
+        } else {
+            $script = '';
+        }
+
+        $script .= 'exit Icinga2AgentModule `' . "\n    "
+            . $this->renderPowershellParameters([
+                'DirectorUrl'       => $this->getDirectorUrl(),
+                'DirectorAuthToken' => $token,
+                'RunInstaller'
+            ]);
+
+        return $script;
+    }
+
+    protected function getDirectorUrl()
+    {
+        $r = Icinga::app()->getRequest();
+        $scheme = $r->getServer('HTTP_X_FORWARDED_PROTO', $r->getScheme());
+
+        return sprintf(
+            '%s://%s%s/director/',
+            $scheme,
+            $r->getHttpHost(),
+            $r->getBaseUrl()
+        );
     }
 
     protected function renderPowershellParameters($parameters)
     {
         $maxKeyLength = max(array_map('strlen', array_keys($parameters)));
+        foreach ($parameters as $key => $value) {
+            if (is_int($key)) {
+                $maxKeyLength = max($maxKeyLength, strlen($value));
+            }
+        }
         $parts = array();
 
         foreach ($parameters as $key => $value) {
-            $parts[] = $this->renderPowershellParameter($key, $value, $maxKeyLength);
+            if (is_int($key)) {
+                $parts[] = $this->renderPowershellParameter($value, null, $maxKeyLength);
+            } else {
+                $parts[] = $this->renderPowershellParameter($key, $value, $maxKeyLength);
+            }
         }
 
         return implode(' `' . "\n    ", $parts);
@@ -161,7 +203,12 @@ class AgentWizard
 
     protected function renderPowershellParameter($key, $value, $maxKeyLength = null)
     {
-        $ret = '-' . $key . ' ';
+        $ret = '-' . $key;
+        if ($value === null) {
+            return $ret;
+        }
+
+        $ret .= ' ';
 
         if ($maxKeyLength !== null) {
             $ret .= str_repeat(' ', $maxKeyLength - strlen($key));
@@ -173,7 +220,7 @@ class AgentWizard
                 $vals[] = $this->renderPowershellString($val);
             }
             $ret .= implode(', ', $vals);
-        } else {
+        } elseif ($value !== null) {
             $ret .= $this->renderPowershellString($value);
         }
 
@@ -194,16 +241,17 @@ class AgentWizard
 
         return $this->db;
     }
+
     public function renderLinuxInstaller()
     {
         return $this->loadBashModuleHead()
             . $this->renderBashParameters(
                 array(
-                    'ICINGA2_NODENAME'        => $this->getCertName(),
-                    'ICINGA2_CA_TICKET'           => $this->getTicket(),
+                    'ICINGA2_NODENAME'         => $this->getCertName(),
+                    'ICINGA2_CA_TICKET'        => $this->getTicket(),
                     'ICINGA2_PARENT_ZONE'      => $this->getParentZone()->getObjectName(),
                     'ICINGA2_PARENT_ENDPOINTS' => array_keys($this->getParentEndpoints()),
-                    'ICINGA2_CA_NODE'         => $this->getCaServer(),
+                    'ICINGA2_CA_NODE'          => $this->getCaServer(),
                 )
             )
             . "\n"
@@ -226,32 +274,33 @@ class AgentWizard
             . '/contrib/linux-agent-installer/Icinga2AgentHead.bash'
         );
     }
+
     protected function renderBashParameters($parameters)
     {
-        $maxKeyLength = max(array_map('strlen', array_keys($parameters)));
         $parts = array();
 
         foreach ($parameters as $key => $value) {
-            $parts[] = $this->renderBashParameter($key, $value, $maxKeyLength);
+            $parts[] = $this->renderBashParameter($key, $value);
         }
 
-        return implode("\n    ", $parts);
+        return implode("\n", $parts);
     }
 
-    protected function renderBashParameter($key, $value, $maxKeyLength = null)
+    protected function renderBashParameter($key, $value)
     {
         $ret = $key . '=';
 
-        //if ($maxKeyLength !== null) {
-        //    $ret .= str_repeat(' ', $maxKeyLength - strlen($key));
-        //}
+        // Cheating, this doesn't really help. We should ship the rendered config
+        if (is_array($value) && count($value) === 1) {
+            $value = array_shift($value);
+        }
 
         if (is_array($value)) {
             $vals = array();
             foreach ($value as $val) {
                 $vals[] = $this->renderPowershellString($val);
             }
-            $ret .= implode(', ', $vals);
+            $ret .= '(' . implode(' ', $vals) . ')';
         } else {
             $ret .= $this->renderPowershellString($value);
         }

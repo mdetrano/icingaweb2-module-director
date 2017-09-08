@@ -24,6 +24,7 @@ CREATE TABLE director_activity_log (
   INDEX sort_idx (change_time),
   INDEX search_idx (object_name),
   INDEX search_idx2 (object_type(32), object_name(64), change_time),
+  INDEX search_author (author),
   INDEX checksum (checksum)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -109,6 +110,7 @@ CREATE TABLE director_datalist_entry (
   entry_name VARCHAR(255) COLLATE utf8_bin NOT NULL,
   entry_value TEXT DEFAULT NULL,
   format enum ('string', 'expression', 'json'),
+  allowed_roles VARCHAR(255) DEFAULT NULL,
   PRIMARY KEY (list_id, entry_name),
   CONSTRAINT director_datalist_value_datalist
     FOREIGN KEY datalist (list_id)
@@ -119,7 +121,7 @@ CREATE TABLE director_datalist_entry (
 
 CREATE TABLE director_datafield (
   id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
-  varname VARCHAR(64) NOT NULL,
+  varname VARCHAR(64) NOT NULL COLLATE utf8_bin,
   caption VARCHAR(255) NOT NULL,
   description TEXT DEFAULT NULL,
   datatype varchar(255) NOT NULL,
@@ -420,6 +422,16 @@ CREATE TABLE icinga_endpoint_inheritance (
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE icinga_host_template_choice (
+  id INT(10) UNSIGNED AUTO_INCREMENT NOT NULL,
+  object_name VARCHAR(64) NOT NULL,
+  description TEXT DEFAULT NULL,
+  min_required SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  max_allowed SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+  PRIMARY KEY (id),
+  UNIQUE KEY (object_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 CREATE TABLE icinga_host (
   id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
   object_name VARCHAR(255) NOT NULL,
@@ -433,6 +445,7 @@ CREATE TABLE icinga_host (
   check_period_id INT(10) UNSIGNED DEFAULT NULL,
   check_interval VARCHAR(8) DEFAULT NULL,
   retry_interval VARCHAR(8) DEFAULT NULL,
+  check_timeout SMALLINT UNSIGNED DEFAULT NULL,
   enable_notifications ENUM('y', 'n') DEFAULT NULL,
   enable_active_checks ENUM('y', 'n') DEFAULT NULL,
   enable_passive_checks ENUM('y', 'n') DEFAULT NULL,
@@ -453,6 +466,7 @@ CREATE TABLE icinga_host (
   master_should_connect ENUM('y', 'n') DEFAULT NULL,
   accept_config ENUM('y', 'n') DEFAULT NULL,
   api_key VARCHAR(40) DEFAULT NULL,
+  template_choice_id INT(10) UNSIGNED DEFAULT NULL,
   PRIMARY KEY (id),
   UNIQUE INDEX object_name (object_name),
   UNIQUE INDEX api_key (api_key),
@@ -481,6 +495,11 @@ CREATE TABLE icinga_host (
     FOREIGN KEY command_endpoint (command_endpoint_id)
     REFERENCES icinga_endpoint (id)
     ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT icinga_host_template_choice
+    FOREIGN KEY choice (template_choice_id)
+    REFERENCES icinga_host_template_choice (id)
+    ON DELETE SET NULL
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -552,6 +571,16 @@ CREATE TABLE icinga_service_set (
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
+CREATE TABLE icinga_service_template_choice (
+  id INT(10) UNSIGNED AUTO_INCREMENT NOT NULL,
+  object_name VARCHAR(64) NOT NULL,
+  description TEXT DEFAULT NULL,
+  min_required SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  max_allowed SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+  PRIMARY KEY (id),
+  UNIQUE KEY (object_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
 CREATE TABLE icinga_service (
   id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
   object_name VARCHAR(255) NOT NULL,
@@ -565,6 +594,7 @@ CREATE TABLE icinga_service (
   check_period_id INT(10) UNSIGNED DEFAULT NULL,
   check_interval VARCHAR(8) DEFAULT NULL,
   retry_interval VARCHAR(8) DEFAULT NULL,
+  check_timeout SMALLINT UNSIGNED DEFAULT NULL,
   enable_notifications ENUM('y', 'n') DEFAULT NULL,
   enable_active_checks ENUM('y', 'n') DEFAULT NULL,
   enable_passive_checks ENUM('y', 'n') DEFAULT NULL,
@@ -585,6 +615,7 @@ CREATE TABLE icinga_service (
   apply_for VARCHAR(255) DEFAULT NULL,
   use_var_overrides ENUM('y', 'n') DEFAULT NULL,
   assign_filter TEXT DEFAULT NULL,
+  template_choice_id INT(10) UNSIGNED DEFAULT NULL,
   PRIMARY KEY (id),
   UNIQUE KEY object_key (object_name, host_id),
   CONSTRAINT icinga_service_host
@@ -621,6 +652,11 @@ CREATE TABLE icinga_service (
     FOREIGN KEY service_set (service_set_id)
     REFERENCES icinga_service_set (id)
     ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT icinga_service_template_choice
+    FOREIGN KEY choice (template_choice_id)
+    REFERENCES icinga_service_template_choice (id)
+    ON DELETE SET NULL
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -729,7 +765,7 @@ CREATE TABLE icinga_service_set_var (
 CREATE TABLE icinga_hostgroup (
   id INT(10) UNSIGNED AUTO_INCREMENT NOT NULL,
   object_name VARCHAR(255) NOT NULL,
-  object_type ENUM('object', 'template') NOT NULL,
+  object_type ENUM('object', 'template', 'external_object') NOT NULL,
   disabled ENUM('y', 'n') NOT NULL DEFAULT 'n',
   display_name VARCHAR(255) DEFAULT NULL,
   assign_filter TEXT DEFAULT NULL,
@@ -815,6 +851,22 @@ CREATE TABLE icinga_hostgroup_host (
   CONSTRAINT icinga_hostgroup_host_hostgroup
     FOREIGN KEY hostgroup (hostgroup_id)
     REFERENCES icinga_hostgroup (id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE icinga_hostgroup_host_resolved (
+  hostgroup_id INT(10) UNSIGNED NOT NULL,
+  host_id INT(10) UNSIGNED NOT NULL,
+  PRIMARY KEY (hostgroup_id, host_id),
+  CONSTRAINT icinga_hostgroup_host_resolved_host
+  FOREIGN KEY host (host_id)
+  REFERENCES icinga_host (id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT icinga_hostgroup_host_resolved_hostgroup
+  FOREIGN KEY hostgroup (hostgroup_id)
+  REFERENCES icinga_hostgroup (id)
     ON DELETE CASCADE
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -1194,6 +1246,7 @@ CREATE TABLE import_source (
   ) NOT NULL DEFAULT 'unknown',
   last_error_message TEXT DEFAULT NULL,
   last_attempt DATETIME DEFAULT NULL,
+  description TEXT DEFAULT NULL,
   PRIMARY KEY (id),
   INDEX search_idx (key_column)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -1217,8 +1270,10 @@ CREATE TABLE import_row_modifier (
   target_property VARCHAR(255) DEFAULT NULL,
   provider_class VARCHAR(72) NOT NULL,
   priority SMALLINT UNSIGNED NOT NULL,
+  description TEXT DEFAULT NULL,
   PRIMARY KEY (id),
   KEY search_idx (property_name),
+  UNIQUE INDEX idx_prio (source_id, priority),
   CONSTRAINT row_modifier_import_source
     FOREIGN KEY source (source_id)
     REFERENCES import_source (id)
@@ -1338,6 +1393,7 @@ CREATE TABLE sync_rule (
   ) NOT NULL DEFAULT 'unknown',
   last_error_message TEXT DEFAULT NULL,
   last_attempt DATETIME DEFAULT NULL,
+  description TEXT DEFAULT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -1507,4 +1563,4 @@ CREATE TABLE icinga_user_resolved_var (
 
 INSERT INTO director_schema_migration
   (schema_version, migration_time)
-  VALUES (127, NOW());
+  VALUES (140, NOW());

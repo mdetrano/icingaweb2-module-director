@@ -8,7 +8,6 @@ use Icinga\Module\Director\Data\PropertiesFilter;
 use Icinga\Module\Director\Db;
 use Icinga\Module\Director\IcingaConfig\IcingaConfig;
 use Icinga\Module\Director\IcingaConfig\IcingaLegacyConfigHelper as c1;
-use Icinga\Module\Director\Web\Form\DirectorObjectForm;
 
 class IcingaHost extends IcingaObject
 {
@@ -27,6 +26,7 @@ class IcingaHost extends IcingaObject
         'check_period_id'       => null,
         'check_interval'        => null,
         'retry_interval'        => null,
+        'check_timeout'         => null,
         'enable_notifications'  => null,
         'enable_active_checks'  => null,
         'enable_passive_checks' => null,
@@ -47,6 +47,7 @@ class IcingaHost extends IcingaObject
         'master_should_connect' => null,
         'accept_config'         => null,
         'api_key'               => null,
+        'template_choice_id'    => null,
     );
 
     protected $relations = array(
@@ -55,6 +56,7 @@ class IcingaHost extends IcingaObject
         'check_period'     => 'IcingaTimePeriod',
         'command_endpoint' => 'IcingaEndpoint',
         'zone'             => 'IcingaZone',
+        'template_choice'  => 'IcingaTemplateChoiceHost',
     );
 
     protected $booleans = array(
@@ -72,6 +74,7 @@ class IcingaHost extends IcingaObject
 
     protected $intervalProperties = array(
         'check_interval' => 'check_interval',
+        'check_timeout'  => 'check_timeout',
         'retry_interval' => 'retry_interval',
     );
 
@@ -83,7 +86,12 @@ class IcingaHost extends IcingaObject
 
     protected $supportsFields = true;
 
+    protected $supportsChoices = true;
+
     protected $supportedInLegacy = true;
+
+    /** @var HostGroupMembershipResolver */
+    protected $hostgroupMembershipResolver;
 
     public static function enumProperties(
         DbConnection $connection = null,
@@ -106,6 +114,9 @@ class IcingaHost extends IcingaObject
             }
 
             if (substr($prop, -3) === '_id') {
+                if ($prop === 'template_choice_id') {
+                    continue;
+                }
                 $prop = substr($prop, 0, -3);
             }
 
@@ -181,6 +192,10 @@ class IcingaHost extends IcingaObject
             return;
         }
 
+        if ($this->isDisabled()) {
+            return;
+        }
+
         if ($this->getRenderingZone($config) === self::RESOLVE_ERROR) {
             return;
         }
@@ -206,7 +221,7 @@ class IcingaHost extends IcingaObject
 
         $props['zone_id'] = $this->getSingleResolvedProperty('zone_id');
 
-        $endpoint = IcingaEndpoint::create($props);
+        $endpoint = IcingaEndpoint::create($props, $this->connection);
 
         $zone = IcingaZone::create(array(
             'object_name' => $name,
@@ -221,6 +236,17 @@ class IcingaHost extends IcingaObject
         $pre = 'zones.d/' . $this->getRenderingZone($config) . '/';
         $config->configFile($pre . 'agent_endpoints')->addObject($endpoint);
         $config->configFile($pre . 'agent_zones')->addObject($zone);
+    }
+
+    public function getAgentListenPort()
+    {
+        $conn = $this->connection;
+        $name = $this->getObjectName();
+        if (IcingaEndpoint::exists($name, $conn)) {
+            return IcingaEndpoint::load($name, $conn)->getResolvedPort();
+        } else {
+            return 5665;
+        }
     }
 
     public function hasAnyOverridenServiceVars()
@@ -288,6 +314,32 @@ class IcingaHost extends IcingaObject
         return $this;
     }
 
+    protected function notifyResolvers()
+    {
+        $resolver = $this->getHostGroupMembershipResolver();
+        $resolver->addObject($this);
+        $resolver->refreshDb();
+
+        return $this;
+    }
+
+    protected function getHostGroupMembershipResolver()
+    {
+        if ($this->hostgroupMembershipResolver === null) {
+            $this->hostgroupMembershipResolver = new HostGroupMembershipResolver(
+                $this->getConnection()
+            );
+        }
+
+        return $this->hostgroupMembershipResolver;
+    }
+
+    public function setHostGroupMembershipResolver(HostGroupMembershipResolver $resolver)
+    {
+        $this->hostgroupMembershipResolver = $resolver;
+        return $this;
+    }
+
     protected function getServiceOverrivesVarname()
     {
         return $this->connection->settings()->override_services_varname;
@@ -331,14 +383,30 @@ class IcingaHost extends IcingaObject
      *
      * @return string
      */
+    protected function renderTemplate_choice_id()
+    {
+        return '';
+    }
+
+    /**
+     * Internal property, will not be rendered
+     *
+     * @return string
+     */
     protected function renderAccept_config()
     {
         // @codingStandardsIgnoreEnd
         return '';
     }
 
+    /**
+     * @codingStandardsIgnoreStart
+     *
+     * @return string
+     */
     protected function renderLegacyDisplay_Name()
     {
+        // @codingStandardsIgnoreEnd
         return c1::renderKeyValue('display_name', $this->display_name);
     }
 
@@ -351,6 +419,73 @@ class IcingaHost extends IcingaObject
         }
 
         return $str;
+    }
+
+    /**
+     * @return IcingaService[]
+     */
+    public function fetchServices()
+    {
+        $connection = $this->getConnection();
+        $db = $connection->getDbAdapter();
+
+        /** @var IcingaService[] $services */
+        $services = IcingaService::loadAll(
+            $connection,
+            $db->select()->from('icinga_service')
+                ->where('host_id = ?', $this->get('id'))
+        );
+
+        return $services;
+    }
+
+    /**
+     * @return IcingaServiceSet[]
+     */
+    public function fetchServiceSets()
+    {
+        $connection = $this->getConnection();
+        $db = $connection->getDbAdapter();
+
+        /** @var IcingaServiceSet[] $sets */
+        $sets = IcingaServiceSet::loadAll(
+            $connection,
+            $db->select()->from('icinga_service_set')
+                ->where('host_id = ?', $this->get('id'))
+        );
+
+        return $sets;
+    }
+
+    /**
+     * @return string
+     */
+    public function generateApiKey()
+    {
+        $key = sha1(
+            (string) microtime(false)
+            . $this->getObjectName()
+            . rand(1, 1000000)
+        );
+
+        if ($this->dbHasApiKey($key)) {
+            $key = $this->generateApiKey();
+        }
+
+        $this->set('api_key', $key);
+
+        return $key;
+    }
+
+    protected function dbHasApiKey($key)
+    {
+        $db = $this->getDb();
+        $query = $db->select()->from(
+            ['o' => $this->getTableName()],
+            'o.api_key'
+        )->where('api_key = ?', $key);
+
+        return $db->fetchOne($query) === $key;
     }
 
     public static function loadWithApiKey($key, Db $db)

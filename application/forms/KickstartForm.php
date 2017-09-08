@@ -9,9 +9,10 @@ use Icinga\Module\Director\Db;
 use Icinga\Module\Director\Db\Migrations;
 use Icinga\Module\Director\Objects\IcingaEndpoint;
 use Icinga\Module\Director\KickstartHelper;
+use Icinga\Module\Director\Web\Form\DirectorForm;
 use Icinga\Module\Director\Web\Form\QuickForm;
 
-class KickstartForm extends QuickForm
+class KickstartForm extends DirectorForm
 {
     private $config;
 
@@ -39,7 +40,6 @@ class KickstartForm extends QuickForm
         }
 
         if (!$this->migrations()->hasSchema()) {
-
             $this->addHtmlHint($this->translate(
                 'No database schema has been created yet'
             ), array('name' => 'HINT_schema'));
@@ -50,7 +50,6 @@ class KickstartForm extends QuickForm
         }
 
         if ($this->migrations()->hasPendingMigrations()) {
-
             $this->addHtmlHint($this->translate(
                 'There are pending database migrations'
             ), array('name' => 'HINT_schema'));
@@ -87,7 +86,7 @@ class KickstartForm extends QuickForm
                 . ' up the connection to your Icinga 2 server.'
             ),
             array('name' => 'HINT_kickstart')
-            // http://docs.icinga.org/icinga2/latest/doc/module/icinga2/chapter/object-types#objecttype-apilistener
+            // http://docs.icinga.com/icinga2/latest/doc/module/icinga2/chapter/object-types#objecttype-apilistener
         );
 
         $this->addElement('text', 'endpoint', array(
@@ -171,7 +170,7 @@ class KickstartForm extends QuickForm
         if ($resourceName = $this->getResourceName()) {
             $resourceConfig = ResourceFactory::getResourceConfig($resourceName);
             if (! isset($resourceConfig->charset)
-                || $resourceConfig->charset !== 'utf8'
+                || ! in_array($resourceConfig->charset, array('utf8', 'utf8mb4'))
             ) {
                 $this->getElement('resource')
                     ->addError('Please change the encoding for the director database to utf8');
@@ -182,7 +181,6 @@ class KickstartForm extends QuickForm
 
             try {
                 $db->fetchOne('SELECT 1');
-
             } catch (Exception $e) {
                 $this->getElement('resource')
                     ->addError('Could not connect to database: ' . $e->getMessage());
@@ -270,7 +268,7 @@ class KickstartForm extends QuickForm
                 'Fieldset',
             ),
             'order' => 60,
-            'legend' => $this->translate('Kickstart wizard')
+            'legend' => $this->translate('Kickstart Wizard')
         ));
     }
 
@@ -318,33 +316,30 @@ class KickstartForm extends QuickForm
 
     public function onSuccess()
     {
-        try {
-            if ($this->getSubmitLabel() === $this->storeConfigLabel) {
-                if ($this->storeResourceConfig()) {
-                    parent::onSuccess();
-                } else {
-                    return;
-                }
-            }
-
-            if ($this->getSubmitLabel() === $this->createDbLabel
-                || $this->getSubmitLabel() === $this->migrateDbLabel) {
-                $this->migrations()->applyPendingMigrations();
+        if ($this->getSubmitLabel() === $this->storeConfigLabel) {
+            if ($this->storeResourceConfig()) {
                 parent::onSuccess();
+            } else {
+                return;
             }
-
-            $values = $this->getValues();
-            if ($this->endpoint && empty($values['password'])) {
-                $values['password'] = $this->endpoint->getApiUser()->password;
-            }
-
-            $kickstart = new KickstartHelper($this->getDb());
-            unset($values['resource']);
-            $kickstart->setConfig($values)->run();
-            parent::onSuccess();
-        } catch (Exception $e) {
-            $this->addError($e->getMessage());
         }
+
+        if ($this->getSubmitLabel() === $this->createDbLabel
+            || $this->getSubmitLabel() === $this->migrateDbLabel) {
+            $this->migrations()->applyPendingMigrations();
+            parent::onSuccess();
+        }
+
+        $values = $this->getValues();
+        if ($this->endpoint && empty($values['password'])) {
+            $values['password'] = $this->endpoint->getApiUser()->password;
+        }
+
+        $kickstart = new KickstartHelper($this->getDb());
+        unset($values['resource']);
+        $kickstart->setConfig($values)->run();
+
+        parent::onSuccess();
     }
 
     protected function getResourceName()
@@ -362,7 +357,7 @@ class KickstartForm extends QuickForm
         }
     }
 
-    protected function getDb()
+    public function getDb()
     {
         return Db::fromResourceName($this->getResourceName());
     }

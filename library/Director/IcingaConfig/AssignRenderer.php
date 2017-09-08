@@ -60,14 +60,7 @@ class AssignRenderer
 
     protected function renderEquals($column, $expression)
     {
-        if ($column[0] === '"') {
-            // "me"=vars.users -> "me" in vars.users
-            return sprintf(
-                '%s in %s',
-                $column,
-                $expression
-            );
-        } else if (substr($column, -7) === '.groups') {
+        if (substr($column, -7) === '.groups') {
             return sprintf(
                 '%s in %s',
                 $expression,
@@ -82,17 +75,63 @@ class AssignRenderer
         }
     }
 
+    protected function renderInArray($column, $expression)
+    {
+        return sprintf(
+            '%s in %s',
+            $column,
+            $expression
+        );
+    }
+
+    protected function renderContains(FilterExpression $filter)
+    {
+        return sprintf(
+            '%s in %s',
+            $this->renderExpressionValue(json_decode($filter->getColumn())),
+            $filter->getExpression()
+        );
+    }
+
     protected function renderFilterExpression(FilterExpression $filter)
     {
-        $column = $filter->getColumn();
-        $expression = $filter->getExpression();
-        if ($filter instanceof FilterEqual) {
-            return sprintf(
-                '%s == %s',
-                $column,
-                $expression
-            );
+        if ($this->columnIsJson($filter)) {
+            return $this->renderContains($filter);
+        }
 
+        $column = $filter->getColumn();
+        $rawExpression = json_decode($filter->getExpression());
+        $expression = $this->renderExpressionValue($rawExpression);
+
+        if (is_array($rawExpression) && $filter instanceof FilterMatch) {
+            return $this->renderInArray($column, $expression);
+        }
+
+        if (ctype_digit($rawExpression)) {
+            // TODO: doing this for compat reasons, should work for all filters
+            if ($filter instanceof FilterEqualOrGreaterThan
+                || $filter instanceof FilterGreaterThan
+                || $filter instanceof FilterEqualOrLessThan
+                || $filter instanceof FilterLessThan
+            ) {
+                $expression = $rawExpression;
+            }
+        }
+
+        if ($filter instanceof FilterEqual) {
+            if (is_array($rawExpression)) {
+                return sprintf(
+                    '%s in %s',
+                    $column,
+                    $expression
+                );
+            } else {
+                return sprintf(
+                    '%s == %s',
+                    $column,
+                    $expression
+                );
+            }
         } elseif ($filter instanceof FilterMatch) {
             if (strpos($expression, '*') === false) {
                 return $this->renderEquals($column, $expression);
@@ -103,7 +142,6 @@ class AssignRenderer
                     $column
                 );
             }
-
         } elseif ($filter instanceof FilterMatchNot) {
             if (strpos($expression, '*') === false) {
                 return sprintf(
@@ -118,48 +156,53 @@ class AssignRenderer
                     $column
                 );
             }
-
         } elseif ($filter instanceof FilterNotEqual) {
-                return sprintf(
-                    '%s != %s',
-                    $column,
-                    $expression
-                );
-
+            return sprintf(
+                '%s != %s',
+                $column,
+                $expression
+            );
         } elseif ($filter instanceof FilterEqualOrGreaterThan) {
-                return sprintf(
-                    '%s >= %s',
-                    $column,
-                    $expression
-                );
-
+            return sprintf(
+                '%s >= %s',
+                $column,
+                $expression
+            );
         } elseif ($filter instanceof FilterEqualOrLessThan) {
-                return sprintf(
-                    '%s <= %s',
-                    $column,
-                    $expression
-                );
-
+            return sprintf(
+                '%s <= %s',
+                $column,
+                $expression
+            );
         } elseif ($filter instanceof FilterGreaterThan) {
-                return sprintf(
-                    '%s > %s',
-                    $column,
-                    $expression
-                );
-
+            return sprintf(
+                '%s > %s',
+                $column,
+                $expression
+            );
         } elseif ($filter instanceof FilterLessThan) {
-                return sprintf(
-                    '%s < %s',
-                    $column,
-                    $expression
-                );
-
+            return sprintf(
+                '%s < %s',
+                $column,
+                $expression
+            );
         } else {
             throw new QueryException(
                 'Filter expression of type "%s" is not supported',
                 get_class($filter)
             );
         }
+    }
+
+    protected function renderExpressionValue($value)
+    {
+        return IcingaConfigHelper::renderPhpValue($value);
+    }
+
+    protected function columnIsJson(FilterExpression $filter)
+    {
+        $col = $filter->getColumn();
+        return strlen($col) && $col[0] === '"';
     }
 
     protected function renderFilterChain(FilterChain $filter)

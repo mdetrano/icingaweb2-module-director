@@ -4,6 +4,7 @@ namespace Icinga\Module\Director\Core;
 
 use Exception;
 use Icinga\Exception\IcingaException;
+use Icinga\Exception\NotFoundError;
 use Icinga\Module\Director\Db;
 use Icinga\Module\Director\IcingaConfig\IcingaConfig;
 use Icinga\Module\Director\Objects\IcingaObject;
@@ -48,9 +49,9 @@ class CoreApi implements DeploymentApiInterface
         )->getResult('name');
     }
 
-    public function onEvent($callback)
+    public function onEvent($callback, $raw = false)
     {
-        $this->client->onEvent($callback);
+        $this->client->onEvent($callback, $raw);
         return $this;
     }
 
@@ -102,6 +103,37 @@ class CoreApi implements DeploymentApiInterface
         );
     }
 
+    public function acknowledgeHostProblem($host, $author, $comment)
+    {
+        $filter = 'host.name == "' . $host . '"';
+        return $this->client->post(
+            'actions/acknowledge-problem?type=Host&filter=' . rawurlencode($filter),
+            (object) array(
+                'author'  => $author,
+                'comment' => $comment
+            )
+        );
+    }
+
+    public function removeHostAcknowledgement($host)
+    {
+        $filter = 'host.name == "' . $host . '"';
+        return $this->client->post(
+            'actions/remove-acknowledgement?type=Host&filter=' . rawurlencode($filter)
+        );
+    }
+
+    public function reloadNow()
+    {
+        try {
+            $this->client->post('actions/restart-process');
+
+            return true;
+        } catch (Exception $e) {
+            return $e->getMessage();
+        }
+    }
+
     public function getHostOutput($host)
     {
         try {
@@ -118,13 +150,12 @@ class CoreApi implements DeploymentApiInterface
 
     public function checkHostAndWaitForResult($host, $timeout = 10)
     {
+        $now = microtime(true);
         $this->checkHostNow($host);
-        $now = time();
 
         while (true) {
             try {
                 $object = $this->getObject($host, 'hosts');
-
                 if (isset($object->attrs->last_check_result)) {
                     $res = $object->attrs->last_check_result;
                     if ($res->execution_start > $now) {
@@ -140,7 +171,41 @@ class CoreApi implements DeploymentApiInterface
                     $host
                 );
             }
-            if (time() > ($now + $timeout)) {
+            if (microtime(true) > ($now + $timeout)) {
+                break;
+            }
+
+            usleep(150000);
+        }
+
+        return false;
+    }
+
+    public function checkServiceAndWaitForResult($host, $service, $timeout = 10)
+    {
+        $now = microtime(true);
+        $this->checkServiceNow($host, $service);
+
+        while (true) {
+            try {
+                $object = $this->getObject("$host!$service", 'services');
+                if (isset($object->attrs->last_check_result)) {
+                    $res = $object->attrs->last_check_result;
+                    if ($res->execution_start > $now) {
+                        return $res;
+                    }
+                } else {
+                    // no check result available
+                }
+            } catch (Exception $e) {
+                // Unable to fetch the requested object
+                throw new IcingaException(
+                    'Unable to fetch the requested service "%s" on "%s"',
+                    $service,
+                    $host
+                );
+            }
+            if (microtime(true) > ($now + $timeout)) {
                 break;
             }
 
@@ -220,7 +285,7 @@ constants
         return $constants;
     }
 
-    protected function runConsoleCommand($command)
+    public function runConsoleCommand($command)
     {
         return $this->client->post(
             'console/execute-script',
@@ -258,12 +323,16 @@ constants
     {
         // TODO: more abstraction needed
         // TODO: autofetch and cache pluraltypes
-        $result = $this->client->get(
-            'objects/' . $pluralType,
-            array(
-                'attrs' => array('__name')
-            )
-        )->getResult('name');
+        try {
+            $result = $this->client->get(
+                'objects/' . $pluralType,
+                array(
+                    'attrs' => array('__name')
+                )
+            )->getResult('name');
+        } catch (NotFoundError $e) {
+            $result = [];
+        }
 
         return array_keys($result);
     }
@@ -427,6 +496,9 @@ constants
         ));
     }
 
+    /**
+     * @return IcingaCommand[]
+     */
     public function getCheckCommandObjects()
     {
         IcingaCommand::setPluginDir($this->getConstant('PluginDir'));
@@ -445,6 +517,9 @@ constants
         return $objects;
     }
 
+    /**
+     * @return IcingaCommand[]
+     */
     public function getNotificationCommandObjects()
     {
         IcingaCommand::setPluginDir($this->getConstant('PluginDir'));
@@ -492,7 +567,7 @@ constants
     public function collectLogFiles(Db $db)
     {
         $existing = $this->listModuleStages('director');
-        foreach ($db->getUncollectedDeployments() as $deployment) {
+        foreach (DirectorDeploymentLog::getUncollected($db) as $deployment) {
             $stage = $deployment->get('stage_name');
             if (! in_array($stage, $existing)) {
                 continue;
@@ -528,7 +603,7 @@ constants
 
     public function wipeInactiveStages(Db $db)
     {
-        $uncollected = $db->getUncollectedDeployments();
+        $uncollected = DirectorDeploymentLog::getUncollected($db);
         $moduleName = 'director';
         foreach ($this->listModuleStages($moduleName, false) as $stage) {
             if (array_key_exists($stage, $uncollected)) {

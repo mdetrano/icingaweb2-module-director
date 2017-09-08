@@ -2,13 +2,14 @@
 
 namespace Icinga\Module\Director\IcingaConfig;
 
+use Icinga\Exception\IcingaException;
 use Icinga\Exception\ProgrammingError;
 
 class IcingaConfigHelper
 {
     /**
      * Reserved words according to
-     * http://docs.icinga.org/icinga2/snapshot/doc/module/icinga2/chapter/language-reference#reserved-keywords
+     * https://docs.icinga.com/icinga2/snapshot/doc/module/icinga2/chapter/language-reference#reserved-keywords
      */
     protected static $reservedWords = array(
         'object',
@@ -63,13 +64,34 @@ class IcingaConfigHelper
 
     public static function renderBoolean($value)
     {
-        if ($value === 'y') {
+        if ($value === 'y' || $value === true) {
             return 'true';
-        } elseif ($value === 'n') {
+        } elseif ($value === 'n' || $value === false) {
             return 'false';
         } else {
             throw new ProgrammingError('%s is not a valid boolean', $value);
         }
+    }
+
+    protected static function renderInteger($value)
+    {
+        return (string) $value;
+    }
+
+    protected static function renderFloat($value)
+    {
+        // Render .0000 floats as integers, mainly because of some JSON
+        // implementations:
+        if ((string) (int) $value === (string) $value) {
+            return static::renderInteger((int) $value);
+        } else {
+            return sprintf('%F', $value);
+        }
+    }
+
+    protected static function renderNull()
+    {
+        return 'null';
     }
 
     // TODO: Find out how to allow multiline {{{...}}} strings.
@@ -101,6 +123,29 @@ class IcingaConfigHelper
         $string = preg_replace($special, $replace, $string);
 
         return '"' . $string . '"';
+    }
+
+    public static function renderPhpValue($value)
+    {
+        if (is_null($value)) {
+            return static::renderNull();
+        } elseif (is_bool($value)) {
+            return static::renderBoolean($value);
+        } elseif (is_integer($value)) {
+            return static::renderInteger($value);
+        } elseif (is_float($value)) {
+            return static::renderFloat($value);
+        // TODO:
+        // } elseif (is_object($value) || static::isAssocArray($value)) {
+        //     return static::renderHash($value, $prefix)
+        // TODO: also check array
+        } elseif (is_array($value)) {
+            return static::renderArray($value);
+        } elseif (is_string($value)) {
+            return static::renderString($value);
+        } else {
+            throw new IcingaException('Unexpected type %s', var_export($value, 1));
+        }
     }
 
     public static function renderDictionaryKey($key)
@@ -158,7 +203,6 @@ class IcingaConfigHelper
 
         // Prefix for toConfigString?
         return "{\n" . implode("\n", $vals) . "\n}";
-
     }
 
     public static function renderExpression($string)

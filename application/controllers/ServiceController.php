@@ -8,25 +8,20 @@ use Icinga\Module\Director\Web\Controller\ObjectController;
 use Icinga\Module\Director\Objects\IcingaServiceSet;
 use Icinga\Module\Director\Objects\IcingaService;
 use Icinga\Module\Director\Objects\IcingaHost;
+use Icinga\Module\Director\Web\Form\DirectorObjectForm;
+use Icinga\Module\Director\Web\Table\IcingaAppliedServiceTable;
+use Icinga\Web\Widget\Tab;
+use ipl\Html\Link;
+use ipl\Web\Widget\Tabs;
 
 class ServiceController extends ObjectController
 {
+    /** @var IcingaHost */
     protected $host;
 
     protected $set;
 
     protected $apply;
-
-    protected function beforeTabs()
-    {
-        if ($this->host) {
-            $this->getTabs()->add('host', array(
-                'url'       => 'director/host',
-                'urlParams' => array('name' => $this->host->object_name),
-                'label'     => $this->translate('Host'),
-            ));
-        }
-    }
 
     protected function checkDirectorPermissions()
     {
@@ -38,41 +33,64 @@ class ServiceController extends ObjectController
         if ($host = $this->params->get('host')) {
             $this->host = IcingaHost::load($host, $this->db());
         } elseif ($set = $this->params->get('set')) {
-            $this->set = IcingaServiceSet::load(array('object_name' => $set), $this->db());
+            $this->set = IcingaServiceSet::load(['object_name' => $set], $this->db());
         } elseif ($apply = $this->params->get('apply')) {
             $this->apply = IcingaService::load(
-                array('object_name' => $apply, 'object_type' => 'template'),
+                ['object_name' => $apply, 'object_type' => 'template'],
                 $this->db()
             );
         }
-
         parent::init();
 
-        if ($this->object) {
-            if ($this->host) {
-                foreach ($this->getTabs()->getTabs() as $tab) {
-                    $tab->getUrl()->setParam('host', $this->host->object_name);
-                }
-            }
+        if ($this->host) {
+            $hostname = $this->host->getObjectName();
+            $tabs = new Tabs();
+            $tabs->add('host', [
+                'url' => 'director/host',
+                'urlParams' => ['name' => $hostname],
+                'label' => $this->translate('Host'),
+            ])->add('services', [
+                'url'       => 'director/host/services',
+                'urlParams' => ['name' => $hostname],
+                'label'     => $this->translate('Services'),
+            ]);
 
-            if (! $this->set && $this->object->service_set_id) {
+            $this->addParamToTabs('host', $hostname);
+            $this->controls()->prependTabs($tabs);
+        }
+
+        if ($this->object) {
+            if (! $this->set && $this->object->get('service_set_id')) {
                 $this->set = $this->object->getRelated('service_set');
             }
         }
 
-        if ($this->host) {
-            $this->getTabs()->add('services', array(
-                'url'       => 'director/host/services',
-                'urlParams' => array('name' => $this->host->object_name),
-                'label'     => $this->translate('Services'),
-            ));
-        } elseif ($this->set) {
-            $this->getTabs()->add('services', array(
+        if ($this->set) {
+            $setName = $this->set->getObjectName();
+            $tabs = new Tabs();
+            $tabs->add('set', [
+                'url'       => 'director/serviceset',
+                'urlParams' => ['name' => $setName],
+                'label'     => $this->translate('Serviceset'),
+            ])->add('services', [
                 'url'       => 'director/serviceset/services',
-                'urlParams' => array('name' => $this->set->object_name),
+                'urlParams' => ['name' => $setName],
                 'label'     => $this->translate('Services'),
-            ));
+            ]);
+
+            $this->addParamToTabs('serviceset', $setName);
+            $this->controls()->prependTabs($tabs);
         }
+    }
+
+    protected function addParamToTabs($name, $value)
+    {
+        foreach ($this->tabs()->getTabs() as $tab) {
+            /** @var Tab $tab */
+            $tab->getUrl()->setParam($name, $value);
+        }
+
+        return $this;
     }
 
     public function addAction()
@@ -93,40 +111,52 @@ class ServiceController extends ObjectController
         }
     }
 
-    /**
-     * @param IcingaServiceForm $form
-     */
-    protected function beforeHandlingAddRequest($form)
+    protected function onObjectFormLoaded(DirectorObjectForm $form)
     {
-        if ($this->apply) {
+        if ($this->object === null && $this->apply) {
             $form->createApplyRuleFor($this->apply);
         }
     }
 
-    public function futureoverviewIndexAction()
-    {
-        $object = $this->loadObject();
-        $title = $this->view->title = $object->object_name;
-        $this->singleTab($this->translate('Icinga Service Template'));
-    }
-
     public function editAction()
     {
+        $this->tabs()->activate('modify');
+
+        /** @var IcingaService $object */
         $object = $this->object;
+        $this->addTitle($object->getObjectName());
 
-        if ($this->host && $object->usesVarOverrides()) {
-
-            $parent = IcingaService::create(array(
-                'object_type' => 'template',
-                'object_name' => 'myself',
-                'vars'        => $object->vars,
-            ), $this->db());
-
-            $object->vars = $this->host->getOverriddenServiceVars($object->object_name);
-            $object->imports()->add($parent);
+        if ($this->host) {
+            $this->actions()->add(Link::create(
+                $this->translate('back'),
+                'director/host/services',
+                ['name' => $this->host->getObjectName()],
+                ['class' => 'icon-left-big']
+            ));
         }
 
-        parent::editAction();
+        $form = IcingaServiceForm::load()->setDb($this->db());
+
+        if ($this->set) {
+            $form->setServiceSet($this->set);
+        }
+        if ($this->host && $object->usesVarOverrides()) {
+            $fake = IcingaService::create(array(
+                'object_type' => 'object',
+                'host_id' => $object->get('host_id'),
+                'imports' => $object,
+                'object_name' => $object->object_name,
+                'use_var_overrides' => 'y',
+                'vars' => $this->host->getOverriddenServiceVars($object->object_name),
+            ), $this->db());
+
+            $form->setObject($fake);
+        } else {
+            $form->setObject($object);
+        }
+
+        $form->handleRequest();
+        $this->addActionClone();
 
         if ($this->host) {
             $this->view->subtitle = sprintf(
@@ -139,7 +169,6 @@ class ServiceController extends ObjectController
             if ($object->isTemplate()
                 && $object->getResolvedProperty('check_command_id')
             ) {
-
                 $this->view->actionLinks .= ' ' . $this->view->qlink(
                     'Create apply-rule',
                     'director/service/add',
@@ -150,30 +179,32 @@ class ServiceController extends ObjectController
         } catch (Exception $e) {
             // ignore the error, show no apply link
         }
+
+        $this->content()->add($form);
     }
 
     public function assignAction()
     {
+        // TODO: figure out whether and where we link to this
+        /** @var IcingaService $service */
         $service = $this->object;
-        $this->view->stayHere = true;
-
-        $this->view->actionLinks = $this->view->qlink(
+        $this->actions()->add(new Link(
             $this->translate('back'),
             $this->getRequest()->getUrl()->without('rule_id'),
             null,
             array('class' => 'icon-left-big')
-        );
+        ));
 
-        $this->getTabs()->activate('applied');
-        $this->view->title = sprintf(
+        $this->tabs()->activate('applied');
+        $this->addTitle(
             $this->translate('Apply: %s'),
-            $service->object_name
+            $service->getObjectName()
         );
-        $this->view->table = $this->loadTable('IcingaAppliedService')
-            ->setService($service)
-            ->setConnection($this->db());
+        $table = (new IcingaAppliedServiceTable($this->db()))
+            ->setService($service);
+        $table->attributes()->set('data-base-target', '_self');
 
-        $this->setViewScript('objects/table');
+        $this->content()->add($table);
     }
 
     public function loadForm($name)
@@ -201,12 +232,12 @@ class ServiceController extends ObjectController
                 $db = $this->db();
 
                 if ($this->host) {
-                    $this->view->host = $this->host;
+                    // $this->view->host = $this->host;
                     $params['host_id'] = $this->host->id;
                 }
 
                 if ($this->set) {
-                    $this->view->set = $this->set;
+                    // $this->view->set = $this->set;
                     $params['service_set_id'] = $this->set->id;
                 }
                 $this->object = IcingaService::load($params, $db);
@@ -214,9 +245,6 @@ class ServiceController extends ObjectController
                 parent::loadObject();
             }
         }
-        $this->view->undeployedChanges = $this->countUndeployedChanges();
-        $this->view->totalUndeployedChanges = $this->db()
-            ->countActivitiesSinceLastDeployedConfig();
 
         return $this->object;
     }

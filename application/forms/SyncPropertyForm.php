@@ -4,6 +4,7 @@ namespace Icinga\Module\Director\Forms;
 
 use Exception;
 use Icinga\Module\Director\Hook\ImportSourceHook;
+use Icinga\Module\Director\Objects\SyncProperty;
 use Icinga\Module\Director\Objects\SyncRule;
 use Icinga\Module\Director\Objects\IcingaObject;
 use Icinga\Module\Director\Objects\ImportSource;
@@ -18,6 +19,9 @@ class SyncPropertyForm extends DirectorObjectForm
 
     /** @var ImportSource */
     private $importSource;
+
+    /** @var ImportSourceHook */
+    private $importSourceHook;
 
     private $dummyObject;
 
@@ -122,7 +126,6 @@ class SyncPropertyForm extends DirectorObjectForm
         }
 
         $this->setButtons();
-
     }
 
     protected function hasSubOption($options, $key)
@@ -247,8 +250,14 @@ class SyncPropertyForm extends DirectorObjectForm
     protected function listSourceColumns()
     {
         $columns = array();
-        foreach ($this->getImportSource()->listColumns() as $col) {
+        $source = $this->getImportSource();
+        $hook = $this->getImportSourceHook();
+        foreach ($hook->listColumns() as $col) {
             $columns['${' . $col . '}'] = $col;
+        }
+
+        foreach ($source->listModifierTargetProperties() as $property) {
+            $columns['${' . $property . '}'] = $property;
         }
 
         return $columns;
@@ -280,24 +289,30 @@ class SyncPropertyForm extends DirectorObjectForm
         }
 
         foreach ($dummy->listProperties() as $prop) {
-            if ($prop === 'id') {
+            if ($dummy instanceof IcingaObject && $prop === 'id') {
                 continue;
             }
 
             // TODO: allow those fields, but munge them (store ids)
             //if (preg_match('~_id$~', $prop)) continue;
             if (substr($prop, -3) === '_id') {
-                $prop = substr($prop, 0, -3);
-                if (! $dummy instanceof IcingaObject || ! $dummy->hasRelation($prop)) {
-                    continue;
+                $short = substr($prop, 0, -3);
+                if ($dummy instanceof IcingaObject) {
+                    if ($dummy->hasRelation($short)) {
+                        $prop = $short;
+                    } else {
+                        continue;
+                    }
                 }
             }
 
             $props[$prop] = $prop;
         }
 
-        foreach ($dummy->listMultiRelations() as $prop) {
-            $props[$prop] = sprintf('%s (%s)', $prop, $this->translate('a list'));
+        if ($dummy instanceof IcingaObject) {
+            foreach ($dummy->listMultiRelations() as $prop) {
+                $props[$prop] = sprintf('%s (%s)', $prop, $this->translate('a list'));
+            }
         }
 
         ksort($props);
@@ -308,22 +323,40 @@ class SyncPropertyForm extends DirectorObjectForm
         );
     }
 
+    /**
+     * @return ImportSource
+     */
     protected function getImportSource()
     {
         if ($this->importSource === null) {
             if ($this->hasObject()) {
-                $src = ImportSource::load($this->object->get('source_id'), $this->db);
+                $this->importSource = ImportSource::load($this->object->get('source_id'), $this->db);
             } else {
-                $src = ImportSource::load($this->getSentValue('source_id'), $this->db);
+                $this->importSource = ImportSource::load($this->getSentValue('source_id'), $this->db);
             }
-            $this->importSource = ImportSourceHook::loadByName($src->get('source_name'), $this->db);
         }
 
         return $this->importSource;
     }
 
+    /**
+     * @return ImportSourceHook
+     */
+    protected function getImportSourceHook()
+    {
+        if ($this->importSourceHook === null) {
+            $this->importSourceHook = ImportSourceHook::loadByName(
+                $this->getImportSource()->get('source_name'),
+                $this->db
+            );
+        }
+
+        return $this->importSourceHook;
+    }
+
     public function onSuccess()
     {
+        /** @var SyncProperty $object */
         $object = $this->getObject();
         $object->set('rule_id', $this->rule->get('id')); // ?!
 
@@ -332,11 +365,10 @@ class SyncPropertyForm extends DirectorObjectForm
         }
 
         $sourceColumn = $this->getValue('source_column');
-        unset($this->source_column);
         $this->removeElement('source_column');
 
         if ($sourceColumn !== self::EXPRESSION) {
-           $object->source_expression = $sourceColumn;
+            $object->source_expression = $sourceColumn;
         }
 
         $destination = $this->getValue('destination_field');
@@ -344,13 +376,6 @@ class SyncPropertyForm extends DirectorObjectForm
             $destination = $this->getValue('customvar');
             $object->destination_field = 'vars.' . $destination;
         }
-
-        if ($object->hasBeenModified()) {
-            if (! $object->hasBeenLoadedFromDb()) {
-                $object->priority = $this->rule->getPriorityForNextProperty();
-            }
-        }
-
 
         return parent::onSuccess();
     }

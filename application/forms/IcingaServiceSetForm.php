@@ -35,7 +35,9 @@ class IcingaServiceSetForm extends DirectorObjectForm
             $object->service = $services;
         }
 
-        if ($this->assertResolvedImports()) {
+        // TODO: disabled for now. Sets have no fields, so somehow the resolver
+        //       fails here
+        if (false && $this->assertResolvedImports()) {
             $this->fieldLoader($object)
                 ->loadFieldsForMultipleObjects($object->getServiceObjects());
         }
@@ -58,9 +60,21 @@ class IcingaServiceSetForm extends DirectorObjectForm
             ->addAssignmentElements();
     }
 
+    protected function setObjectSuccessUrl()
+    {
+        if ($this->host) {
+            $this->setSuccessUrl(
+                'director/host/services',
+                array('name' => $this->host->getObjectName())
+            );
+        } else {
+            parent::setObjectSuccessUrl();
+        }
+    }
+
     protected function setupHost()
     {
-       $object = $this->object();
+        $object = $this->object();
         if ($this->hasBeenSent()) {
             $object->set('object_name', $this->getSentValue('imports'));
             $object->set('imports', $object->object_name);

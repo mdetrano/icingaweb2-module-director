@@ -6,7 +6,7 @@ use Icinga\Exception\ProgrammingError;
 use Icinga\Module\Director\CustomVariable\CustomVariable;
 use Icinga\Module\Director\Db;
 use Icinga\Module\Director\Objects\IcingaObject;
-use Icinga\Module\Director\Objects\IcingaTemplateResolver;
+use Icinga\Module\Director\Resolver\TemplateTree;
 
 /**
  * Central prefetch cache
@@ -28,6 +28,8 @@ class PrefetchCache
     protected $templateResolvers = array();
 
     protected $renderedVars = array();
+
+    protected $templateTrees = array();
 
     public static function initialize(Db $db)
     {
@@ -73,11 +75,6 @@ class PrefetchCache
         return $this->groupsCache($object)->getGroupsForObject($object);
     }
 
-    public function imports(IcingaObject $object)
-    {
-        return $this->templateResolver($object)->setObject($object)->fetchParents();
-    }
-
     /* Hint: not implemented, this happens in DbObject right now
     public function byObjectType($type)
     {
@@ -114,17 +111,6 @@ class PrefetchCache
         return $this->varsCaches[$key];
     }
 
-    protected function templateResolver(IcingaObject $object)
-    {
-        $key = $object->getShortTableName();
-
-        if (! array_key_exists($key, $this->templateResolvers)) {
-            $this->templateResolvers[$key] = new IcingaTemplateResolver($object);
-        }
-
-        return $this->templateResolvers[$key];
-    }
-
     protected function groupsCache(IcingaObject $object)
     {
         $key = $object->getShortTableName();
@@ -134,6 +120,19 @@ class PrefetchCache
         }
 
         return $this->groupsCaches[$key];
+    }
+
+    protected function templateTree(IcingaObject $object)
+    {
+        $key = $object->getShortTableName();
+        if (! array_key_exists($key, $this->templateTrees)) {
+            $this->templateTrees[$key] = new TemplateTree(
+                $key,
+                $object->getConnection()
+            );
+        }
+
+        return $this->templateTrees[$key];
     }
 
     public function __destruct()

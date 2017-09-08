@@ -3,6 +3,7 @@
 use Icinga\Data\Filter\Filter;
 use Icinga\Data\Filter\FilterChain;
 use Icinga\Data\Filter\FilterExpression;
+use Icinga\Data\FilterColumns;
 use Icinga\Exception\ProgrammingError;
 use Icinga\Module\Director\Objects\IcingaObject;
 use Icinga\Module\Director\Objects\IcingaObjectGroup;
@@ -219,7 +220,7 @@ class Zend_View_Helper_FormDataFilter extends Zend_View_Helper_FormElement
     {
         $value = $filter === null ? '' : $filter->getExpression();
         if (is_array($value)) {
-            return $this->view->formExtensibleSet(
+            return $this->view->formIplExtensibleSet(
                 $this->elementId('value', $filter),
                 $value
             );
@@ -350,6 +351,16 @@ class Zend_View_Helper_FormDataFilter extends Zend_View_Helper_FormElement
                 array('class' => 'column autosubmit')
             );
         }
+
+
+        return $this->view->formText(
+            $this->elementId('column', $filter),
+            $active,
+            [
+                'class' => 'column autosubmit director-suggest',
+                'data-suggestion-context' => 'HostFilterColumns',
+            ]
+        );
 
         $cols = $this->getColumnList();
         if ($active && !isset($cols[$active])) {

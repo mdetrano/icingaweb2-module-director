@@ -81,8 +81,7 @@ class IcingaConfig
     {
         if ($this->isLegacy()) {
             return $this->deploymentModeV1;
-        }
-        else {
+        } else {
             throw new ProgrammingError('There is no deployment mode for Icinga 2 config format!');
         }
     }
@@ -162,7 +161,7 @@ class IcingaConfig
     }
 
     /**
-     * @return string
+     * @return array
      */
     public function getFileNames()
     {
@@ -458,7 +457,6 @@ class IcingaConfig
         ini_set('zend.enable_gc', 0);
 
         if (! $this->connection->isPgsql() && $this->db->quote("1\0") !== '\'1\\0\'') {
-
             throw new IcingaException(
                 'Refusing to render the configuration, your DB layer corrupts binary data.'
                 . ' You might be affected by Zend Framework bug #655'
@@ -504,7 +502,8 @@ class IcingaConfig
                 sprintf(
                     'director/%s/001-director-basics',
                     $this->connection->getDefaultGlobalZoneName()
-                ), '.cfg'
+                ),
+                '.cfg'
             )->prepend(
                 $this->renderLegacyDefaultNotification()
             );

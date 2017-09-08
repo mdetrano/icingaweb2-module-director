@@ -1,9 +1,16 @@
 <?php
 
-use Icinga\Application\Icinga;
+use Icinga\Application\Modules\Module;
+use ipl\Loader\CompatLoader;
+
+if (version_compare(PHP_VERSION, '5.4.0') < 0) {
+    include __DIR__ . '/run-php5.3.php';
+    return;
+}
 
 $prefix = '\\Icinga\\Module\\Director\\';
 
+/** @var Module $this */
 $this->provideHook('monitoring/HostActions');
 $this->provideHook('monitoring/ServiceActions');
 
@@ -21,6 +28,7 @@ $this->provideHook('director/DataType', $prefix . 'DataType\\DataTypeString');
 
 $this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierLowercase');
 $this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierRegexReplace');
+$this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierRegexSplit');
 $this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierReplace');
 $this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierStripDomain');
 $this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierSubstring');
@@ -37,6 +45,9 @@ $this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\Pro
 $this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierMakeBoolean');
 $this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierJsonDecode');
 $this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierToInt');
+$this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierLConfCustomVar');
+$this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierArrayFilter');
+$this->provideHook('director/PropertyModifier', $prefix . 'PropertyModifier\\PropertyModifierCombine');
 
 $this->provideHook('director/Job', $prefix . 'Job\\HousekeepingJob');
 $this->provideHook('director/Job', $prefix . 'Job\\ConfigJob');
@@ -44,3 +55,15 @@ $this->provideHook('director/Job', $prefix . 'Job\\ImportJob');
 $this->provideHook('director/Job', $prefix . 'Job\\SyncJob');
 
 $this->provideHook('cube/Actions', 'CubeLinks');
+
+// ipl compat, unless it is released:
+if (class_exists('ipl\\Html\\ValidHtml')) {
+    return;
+}
+
+if ($this->app->getModuleManager()->hasEnabled('ipl')) {
+    return;
+}
+
+require_once __DIR__ . '/library/vendor/ipl/Loader/CompatLoader.php';
+CompatLoader::delegateLoadingToIcingaWeb($this->app);

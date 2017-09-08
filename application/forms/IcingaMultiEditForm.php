@@ -40,6 +40,7 @@ class IcingaMultiEditForm extends DirectorObjectForm
         $object = $this->object;
 
         $loader = new IcingaObjectFieldLoader($object);
+        $loader->prepareElements($this);
         $loader->addFieldsToForm($this);
 
         if ($form = $this->relatedForm) {
@@ -96,6 +97,16 @@ class IcingaMultiEditForm extends DirectorObjectForm
      */
     protected function onRequest()
     {
+        if ($this->hasBeenSent()) {
+            $this->handlePost();
+        }
+    }
+
+    protected function handlePost()
+    {
+        if ($this->shouldBeDeleted()) {
+            $this->deleteObjects();
+        }
     }
 
     protected function setSubmittedMultiValue($key, $value)
@@ -275,5 +286,24 @@ class IcingaMultiEditForm extends DirectorObjectForm
         }
 
         return $res;
+    }
+
+    protected function deleteObjects()
+    {
+        $msg = sprintf(
+            '%d objects of type "%s" have been removed',
+            count($this->objects),
+            $this->translate($this->object->getShortTableName())
+        );
+
+        foreach ($this->objects as $object) {
+            $object->delete();
+        }
+
+        if ($this->listUrl) {
+            $this->setSuccessUrl($this->listUrl);
+        }
+
+        $this->redirectOnSuccess($msg);
     }
 }

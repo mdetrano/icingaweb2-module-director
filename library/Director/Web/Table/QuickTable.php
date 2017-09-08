@@ -15,14 +15,15 @@ use Icinga\Exception\QueryException;
 use Icinga\Module\Director\Db;
 use Icinga\Module\Director\PlainObjectRenderer;
 use Icinga\Web\Request;
-use Icinga\Web\Url;
+use ipl\Web\Url;
 use Icinga\Web\View;
 use Icinga\Web\Widget;
 use Icinga\Web\Widget\Paginator;
+use ipl\Html\ValidHtml;
 use stdClass;
 use Zend_Db_Select as ZfDbSelect;
 
-abstract class QuickTable implements Paginatable
+abstract class QuickTable implements Paginatable, ValidHtml
 {
     protected $view;
 
@@ -114,7 +115,6 @@ abstract class QuickTable implements Paginatable
         $firstCol = true;
 
         foreach ($this->getTitles() as $key => $title) {
-
             // Support missing columns
             if (property_exists($row, $key)) {
                 $val = $row->$key;
@@ -134,7 +134,7 @@ abstract class QuickTable implements Paginatable
             if ($value === null) {
                 if ($val === null) {
                     $value = '-';
-                } elseif (is_array($val) || $val instanceof stdClass) {
+                } elseif (is_array($val) || $val instanceof stdClass || is_bool($val)) {
                     $value = '<pre>'
                            . $this->view()->escape(PlainObjectRenderer::render($val))
                            . '</pre>';
@@ -196,7 +196,7 @@ abstract class QuickTable implements Paginatable
         }
         if ($filter) {
             foreach ($enforced as $f) {
-                $filter->andFilter($f);
+                $filter = $filter->andFilter($f);
             }
             $query->where($this->renderFilter($filter));
         }
@@ -308,11 +308,26 @@ abstract class QuickTable implements Paginatable
              . $this->renderMultiselectAttributes()
              . '>' . "\n"
              . $this->renderTitles($this->getTitles())
-             . "<tbody>\n";
+             . $this->beginTableBody();
         foreach ($data as $row) {
             $htm .= $this->renderRow($row);
         }
-        return $htm . "</tbody>\n</table>\n";
+        return $htm . $this->endTableBody() . $this->endTable();
+    }
+
+    protected function beginTableBody()
+    {
+        return "<tbody>\n";
+    }
+
+    protected function endTableBody()
+    {
+        return "</tbody>\n";
+    }
+
+    protected function endTable()
+    {
+        return "</table>\n";
     }
 
     /**

@@ -27,6 +27,7 @@ class IcingaService extends IcingaObject
         'check_period_id'       => null,
         'check_interval'        => null,
         'retry_interval'        => null,
+        'check_timeout'         => null,
         'enable_notifications'  => null,
         'enable_active_checks'  => null,
         'enable_passive_checks' => null,
@@ -47,6 +48,7 @@ class IcingaService extends IcingaObject
         'apply_for'             => null,
         'use_var_overrides'     => null,
         'assign_filter'         => null,
+        'template_choice_id'    => null,
     );
 
     protected $relations = array(
@@ -57,6 +59,7 @@ class IcingaService extends IcingaObject
         'check_period'     => 'IcingaTimePeriod',
         'command_endpoint' => 'IcingaEndpoint',
         'zone'             => 'IcingaZone',
+        'template_choice'  => 'IcingaTemplateChoiceService',
     );
 
     protected $booleans = array(
@@ -73,6 +76,7 @@ class IcingaService extends IcingaObject
 
     protected $intervalProperties = array(
         'check_interval' => 'check_interval',
+        'check_timeout'  => 'check_timeout',
         'retry_interval' => 'retry_interval',
     );
 
@@ -87,6 +91,8 @@ class IcingaService extends IcingaObject
     protected $supportsApplyRules = true;
 
     protected $supportsSets = true;
+
+    protected $supportsChoices = true;
 
     protected $supportedInLegacy = true;
 
@@ -179,8 +185,7 @@ class IcingaService extends IcingaObject
     {
         if ($this->get('service_set_id') !== null) {
             return;
-        }
-        else if ($this->isApplyRule()) {
+        } elseif ($this->isApplyRule()) {
             $this->renderLegacyApplyToConfig($config);
         } else {
             parent::renderToLegacyConfig($config);
@@ -261,8 +266,8 @@ class IcingaService extends IcingaObject
     {
         if ($this->isApplyRule()
             && !$this->hasBeenAssignedToHostTemplate()
-            && $this->get('apply_for') !== null) {
-
+            && $this->get('apply_for') !== null
+        ) {
             $name = $this->getObjectName();
             $extraName = '';
 
@@ -282,6 +287,7 @@ class IcingaService extends IcingaObject
                 'vars.config = config'
             ) . $extraName;
         }
+
         return parent::renderObjectHeader();
     }
 
@@ -326,7 +332,7 @@ class IcingaService extends IcingaObject
     {
         $output = '';
 
-         if ($this->hasBeenAssignedToHostTemplate()) {
+        if ($this->hasBeenAssignedToHostTemplate()) {
             // TODO: use assignment renderer?
             $filter = sprintf(
                 'assign where %s in host.templates',
@@ -336,7 +342,7 @@ class IcingaService extends IcingaObject
             $output .= "\n    " . $filter . "\n";
         }
 
-       // A hand-crafted command endpoint overrides use_agent
+        // A hand-crafted command endpoint overrides use_agent
         if ($this->command_endpoint_id !== null) {
             return $output;
         }
@@ -364,6 +370,11 @@ class IcingaService extends IcingaObject
     }
 
     public function renderUse_var_overrides()
+    {
+        return '';
+    }
+
+    protected function renderTemplate_choice_id()
     {
         return '';
     }
@@ -427,6 +438,9 @@ class IcingaService extends IcingaObject
             }
 
             if (substr($prop, -3) === '_id') {
+                if ($prop === 'template_choice_id') {
+                    continue;
+                }
                 $prop = substr($prop, 0, -3);
             }
 

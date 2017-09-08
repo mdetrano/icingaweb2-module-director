@@ -7,7 +7,6 @@ use Icinga\Exception\IcingaException;
 use Icinga\Module\Director\Exception\DuplicateKeyException;
 use Icinga\Module\Director\IcingaConfig\IcingaConfig;
 
-
 class IcingaServiceSet extends IcingaObject
 {
     protected $table = 'icinga_service_set';
@@ -54,8 +53,7 @@ class IcingaServiceSet extends IcingaObject
             if (count($keyComponents) === 1) {
                 $this->set('object_name', $keyComponents[0]);
                 $this->set('object_type', 'template');
-            }
-            else {
+            } else {
                 throw new IcingaException('Can not parse key: %s', $key);
             }
         } else {
@@ -135,6 +133,7 @@ class IcingaServiceSet extends IcingaObject
                 $service->set('assign_filter', $filter);
             } elseif ($hostId = $this->get('host_id')) {
                 $service->set('object_type', 'object');
+                $service->set('use_var_overrides', 'y');
                 $service->set('host_id', $this->get('host_id'));
             } else {
                 // Service set template without assign filter or host
@@ -171,7 +170,7 @@ class IcingaServiceSet extends IcingaObject
         return sprintf($comment, $this->getObjectName());
     }
 
-    protected function copyVarsToService(IcingaService $service)
+    public function copyVarsToService(IcingaService $service)
     {
         $serviceVars = $service->vars();
 
@@ -210,7 +209,6 @@ class IcingaServiceSet extends IcingaObject
                 }
             }
         } else {
-
             foreach ($this->getServiceObjects() as $service) {
                 $service->set('object_type', 'object');
                 $service->set('host_id', $this->get('host_id'));

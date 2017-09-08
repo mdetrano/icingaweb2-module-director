@@ -6,6 +6,7 @@ use Icinga\Application\Benchmark;
 use Icinga\Exception\ConfigurationError;
 use Icinga\Exception\NotFoundError;
 use Icinga\Module\Director\Data\Db\DbObjectWithSettings;
+use Icinga\Module\Director\Hook\PropertyModifierHook;
 use Icinga\Module\Director\Import\Import;
 use Icinga\Module\Director\Import\SyncUtils;
 use Exception;
@@ -26,6 +27,7 @@ class ImportSource extends DbObjectWithSettings
         'import_state'       => 'unknown',
         'last_error_message' => null,
         'last_attempt'       => null,
+        'description'        => null,
     );
 
     protected $settingsTable = 'import_source_setting';
@@ -34,11 +36,20 @@ class ImportSource extends DbObjectWithSettings
 
     private $rowModifiers;
 
+    /**
+     * @param bool $required
+     * @return ImportRun|null
+     */
     public function fetchLastRun($required = false)
     {
         return $this->fetchLastRunBefore(time() + 1, $required);
     }
 
+    /**
+     * @param $timestamp
+     * @param bool $required
+     * @return ImportRun|null
+     */
     public function fetchLastRunBefore($timestamp, $required = false)
     {
         if (! $this->hasBeenLoadedFromDb()) {
@@ -97,7 +108,11 @@ class ImportSource extends DbObjectWithSettings
         $modifiers = $this->getRowModifiers();
 
         foreach ($modifiers as $key => $mods) {
+            /** @var PropertyModifierHook $mod */
             foreach ($mods as $mod) {
+                if ($mod->requiresRow()) {
+                    $mod->setRow($row);
+                }
                 if (! property_exists($row, $key)) {
                     // Partial support for nested keys. Must write result to
                     // a dedicated flat key
@@ -153,13 +168,16 @@ class ImportSource extends DbObjectWithSettings
     public function fetchRowModifiers()
     {
         $db = $this->getDb();
-        return ImportRowModifier::loadAll(
+
+        $modifiers = ImportRowModifier::loadAll(
             $this->getConnection(),
             $db->select()
                ->from('import_row_modifier')
                ->where('source_id = ?', $this->id)
-               ->order('priority DESC')
+               ->order('priority ASC')
         );
+
+        return $modifiers;
     }
 
     protected function prepareRowModifiers()
@@ -181,6 +199,7 @@ class ImportSource extends DbObjectWithSettings
     {
         $list = array();
         foreach ($this->getRowModifiers() as $rowMods) {
+            /** @var PropertyModifierHook $mod */
             foreach ($rowMods as $mod) {
                 if ($mod->hasTargetProperty()) {
                     $list[$mod->getTargetProperty()] = true;
@@ -213,7 +232,6 @@ class ImportSource extends DbObjectWithSettings
             }
 
             $this->last_error_message = null;
-
         } catch (Exception $e) {
             $this->import_state = 'failing';
             Benchmark::measure('Import failed for ' . $this->source_name);

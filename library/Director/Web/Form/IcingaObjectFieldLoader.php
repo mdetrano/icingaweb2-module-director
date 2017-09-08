@@ -6,22 +6,33 @@ use Exception;
 use Icinga\Data\Filter\Filter;
 use Icinga\Data\Filter\FilterExpression;
 use Icinga\Exception\IcingaException;
+use Icinga\Module\Director\Objects\IcingaCommand;
 use Icinga\Module\Director\Objects\IcingaHost;
 use Icinga\Module\Director\Objects\IcingaObject;
 use Icinga\Module\Director\Objects\DirectorDatafield;
 use Icinga\Module\Director\Objects\IcingaService;
 use stdClass;
+use Zend_Db_Select as ZfSelect;
 use Zend_Form_Element as ZfElement;
 
 class IcingaObjectFieldLoader
 {
     protected $form;
 
+    /** @var IcingaObject */
     protected $object;
+
+    /** @var \Icinga\Module\Director\Db */
+    protected $connection;
+
+    /** @var \Zend_Db_Adapter_Abstract */
+    protected $db;
 
     protected $fields;
 
     protected $elements;
+
+    protected $forceNull = array();
 
     /** @var array Map element names to variable names 'elName' => 'varName' */
     protected $nameMap = array();
@@ -29,6 +40,8 @@ class IcingaObjectFieldLoader
     public function __construct(IcingaObject $object)
     {
         $this->object = $object;
+        $this->connection = $object->getConnection();
+        $this->db = $this->connection->getDbAdapter();
     }
 
     public function addFieldsToForm(QuickForm $form)
@@ -45,16 +58,16 @@ class IcingaObjectFieldLoader
         $fields = array();
         foreach ($objects as $object) {
             foreach ($this->prepareObjectFields($object) as $varname => $field) {
-                $varname = $field->varname;
+                $varname = $field->get('varname');
                 if (array_key_exists($varname, $fields)) {
-                    if ($field->datatype !== $fields[$varname]->datatype) {
+                    if ($field->get('datatype') !== $fields[$varname]->datatype) {
                         unset($fields[$varname]);
                     }
 
                     continue;
                 }
 
-                $fields[$field->varname] = $field;
+                $fields[$varname] = $field;
             }
         }
 
@@ -66,13 +79,15 @@ class IcingaObjectFieldLoader
     /**
      * Set a list of values
      *
-     * Works in a failsafe way, when a field does not exist the value will be
+     * Works in a fail-safe way, when a field does not exist the value will be
      * silently ignored
      *
      * @param array  $values key/value pairs with variable names and their value
-     * @param String $prefix An optional prefix that would be stripped from keys
+     * @param string $prefix An optional prefix that would be stripped from keys
      *
-     * @return self
+     * @return IcingaObjectFieldLoader
+     *
+     * @throws IcingaException
      */
     public function setValues($values, $prefix = null)
     {
@@ -122,6 +137,13 @@ class IcingaObjectFieldLoader
             }
 
             $vars->set($varName, $value);
+        }
+
+        // Hint: this does currently not happen, as removeFilteredFields did not
+        //       take place yet. This has been added to be on the safe side when
+        //       cleaning things up one future day
+        foreach ($this->forceNull as $key) {
+            $vars->set($key, null);
         }
 
         return $this;
@@ -211,7 +233,6 @@ class IcingaObjectFieldLoader
         $filters = array();
         foreach ($this->fields as $key => $field) {
             if ($filter = $field->var_filter) {
-
                 $filters[$key] = Filter::fromQueryString($filter);
             }
         }
@@ -219,14 +240,6 @@ class IcingaObjectFieldLoader
         $kill = array();
         $columns = array();
         $object = $this->object;
-
-        $object->invalidateResolveCache();
-        $vars = $object::fromPlainObject(
-            $object->toPlainObject(true),
-            $object->getConnection()
-        )->vars()->flatten();
-
-        $prefixedVars = (object) array();
         if ($object instanceof IcingaHost) {
             $prefix = 'host.vars.';
         } elseif ($object instanceof IcingaService) {
@@ -235,6 +248,13 @@ class IcingaObjectFieldLoader
             return $elements;
         }
 
+        $object->invalidateResolveCache();
+        $vars = $object::fromPlainObject(
+            $object->toPlainObject(true),
+            $object->getConnection()
+        )->vars()->flatten();
+
+        $prefixedVars = (object) array();
         foreach ($vars as $k => $v) {
             $prefixedVars->{$prefix . $k} = $v;
         }
@@ -250,9 +270,15 @@ class IcingaObjectFieldLoader
             }
         }
 
+        $vars = $object->vars();
         foreach ($kill as $key) {
             unset($elements[$key]);
+            $this->forceNull[$key] = $key;
+            // Hint: this should happen later on, currently execution order is
+            //       a little bit weird
+            $vars->set($key, null);
         }
+
         foreach ($columns as $col) {
             if (array_key_exists($col, $elements)) {
                 $el = $elements[$col];
@@ -280,7 +306,8 @@ class IcingaObjectFieldLoader
     /**
      * Get the form element for a specific field by it's variable name
      *
-     * @return ZfElement|null
+     * @param  string $name
+     * @return null|ZfElement
      */
     protected function getElement($name)
     {
@@ -321,6 +348,9 @@ class IcingaObjectFieldLoader
         return $elements;
     }
 
+    /**
+     * @param IcingaObject $object
+     */
     protected function setValuesFromObject(IcingaObject $object)
     {
         foreach ($object->getVars() as $k => $v) {
@@ -346,6 +376,7 @@ class IcingaObjectFieldLoader
         $fields = $this->loadResolvedFieldsForObject($object);
         if ($object->hasRelation('check_command')) {
             try {
+                /** @var IcingaCommand $command */
                 $command = $object->getResolvedRelated('check_command');
             } catch (Exception $e) {
                 // Ignore failures
@@ -353,13 +384,16 @@ class IcingaObjectFieldLoader
             }
 
             if ($command) {
-                $cmdFields = $this->loadResolvedFieldsForObject($command);
+                $cmdLoader = new static($command);
+                $cmdFields = $cmdLoader->getFields($command);
                 foreach ($cmdFields as $varname => $field) {
                     if (! array_key_exists($varname, $fields)) {
                         $fields[$varname] = $field;
                     }
                 }
             }
+
+            // TODO -> filters!
         }
 
         return $fields;
@@ -371,15 +405,14 @@ class IcingaObjectFieldLoader
      * Follows the inheritance logic, resolves all fields and keeps the most
      * specific ones. Returns a list of fields indexed by variable name
      *
+     * @param IcingaObject $object
+     *
      * @return DirectorDatafield[]
      */
-    protected function loadResolvedFieldsForObject($object)
+    protected function loadResolvedFieldsForObject(IcingaObject $object)
     {
-        $result = $this->loadDataFieldsForObjects(
-            array_merge(
-                $object->templateResolver()->fetchResolvedParents(),
-                array($object)
-            )
+        $result = $this->loadDataFieldsForObject(
+            $object
         );
 
         $fields = array();
@@ -393,39 +426,64 @@ class IcingaObjectFieldLoader
     }
 
     /**
-     * Fetches fields for a given List of objects from the database
-     *
-     * Gives a list indexed by object id, with each entry being a list of that
-     * objects DirectorDatafield instances indexed by variable name
-     *
      * @param IcingaObject[] $objectList List of objects
      *
-     * @return Array
+     * @return array
      */
-    protected function loadDataFieldsForObjects($objectList)
+    protected function getIdsForObjectList($objectList)
     {
         $ids = array();
-        $objects = array();
         foreach ($objectList as $object) {
             if ($object->hasBeenLoadedFromDb()) {
-                $ids[] = $object->id;
-                $objects[$object->id] = $object;
+                $ids[] = $object->get('id');
             }
         }
 
-        if (empty($ids)) {
+        return $ids;
+    }
+
+    public function fetchFieldDetailsForObject(IcingaObject $object)
+    {
+        if (! $object->hasBeenLoadedFromDb()) {
+            //return array();
+        }
+
+        $ids = $object->listAncestorIds();
+        $ids[] = $object->getProperty('id');
+        return $this->fetchFieldDetailsForIds($ids);
+    }
+
+    /***
+     * @param $objectIds
+     *
+     * @return \stdClass[]
+     */
+    protected function fetchFieldDetailsForIds($objectIds)
+    {
+        if (empty($objectIds)) {
             return array();
         }
 
-        $connection = $object->getConnection();
-        $db = $connection->getDbAdapter();
+        $query = $this->prepareSelectForIds($objectIds);
+        return $this->db->fetchAll($query);
+    }
+
+    /**
+     * @param array $ids
+     *
+     * @return ZfSelect
+     */
+    protected function prepareSelectForIds(array $ids)
+    {
+        $object = $this->object;
 
         $idColumn = 'f.' . $object->getShortTableName() . '_id';
 
-        $query = $db->select()->from(
+        $query = $this->db->select()->from(
             array('df' => 'director_datafield'),
             array(
                 'object_id'   => $idColumn,
+                'icinga_type' => "('" . $object->getShortTableName() . "')",
                 'var_filter'  => 'f.var_filter',
                 'is_required' => 'f.is_required',
                 'id'          => 'df.id',
@@ -440,23 +498,37 @@ class IcingaObjectFieldLoader
             'df.id = f.datafield_id',
             array()
         )->where($idColumn . ' IN (?)', $ids)
-         ->order('df.caption ASC');
+            ->order('CASE WHEN var_filter IS NULL THEN 0 ELSE 1 END ASC')
+            ->order('df.caption ASC');
 
-        $res = $db->fetchAll($query);
+        return $query;
+    }
+
+    /**
+     * Fetches fields for a given List of objects from the database
+     *
+     * Gives a list indexed by object id, with each entry being a list of that
+     * objects DirectorDatafield instances indexed by variable name
+     *
+     * @param IcingaObject[] $objectList List of objects
+     *
+     * @return array
+     */
+    public function loadDataFieldsForObject(IcingaObject $object)
+    {
+        $res = $this->fetchFieldDetailsForObject($object);
 
         $result = array();
         foreach ($res as $r) {
             $id = $r->object_id;
             unset($r->object_id);
-
-            $r->object = $objects[$id];
             if (! array_key_exists($id, $result)) {
                 $result[$id] = new stdClass;
             }
 
             $result[$id]->{$r->varname} = DirectorDatafield::fromDbRow(
                 $r,
-                $connection
+                $this->connection
             );
         }
 

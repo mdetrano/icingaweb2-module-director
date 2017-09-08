@@ -2,10 +2,14 @@
 
 namespace Icinga\Module\Director\Forms;
 
+use Icinga\Module\Director\Core\CoreApi;
 use Icinga\Module\Director\Web\Form\DirectorObjectForm;
 
 class IcingaHostForm extends DirectorObjectForm
 {
+    /** @var  CoreApi */
+    private $api;
+
     public function setup()
     {
         $this->addObjectTypeElement();
@@ -17,6 +21,7 @@ class IcingaHostForm extends DirectorObjectForm
         $this->addElement('text', 'object_name', array(
             'label'       => $this->translate('Hostname'),
             'required'    => true,
+            'spellcheck'  => 'false',
             'description' => $this->translate(
                 'Icinga object name for this host. This is usually a fully qualified host name'
                 . ' but it could basically be any kind of string. To make things easier for your'
@@ -34,26 +39,24 @@ class IcingaHostForm extends DirectorObjectForm
 
         $this->addGroupsElement()
              ->addImportsElement()
+             ->addChoices('host')
              ->addDisplayNameElement()
              ->addAddressElements()
              ->addDisabledElement()
              ->groupMainProperties()
-             ->addClusteringElements()
-             ->addCheckCommandElements()
+             ->addClusteringElements();
+
+        $this->addCheckCommandElements()
              ->addCheckExecutionElements()
              ->addExtraInfoElements()
              ->setButtons();
     }
 
     /**
-     * @return self
+     * @return $this
      */
     protected function addClusteringElements()
     {
-        if (!$this->isTemplate() && !$this->hasClusterProperties()) {
-            return $this;
-        }
-
         $this->addZoneElement();
 
         $this->addBoolean('has_agent', array(
@@ -81,16 +84,18 @@ class IcingaHostForm extends DirectorObjectForm
             $this->addHidden('command_endpoint_id', null);
             $this->setSentValue('command_endpoint_id', null);
         } else {
-            $this->addElement('select', 'command_endpoint_id', array(
-                'label' => $this->translate('Command endpoint'),
-                'description' => $this->translate(
-                    'Setting a command endpoint allows you to force host checks'
-                    . ' to be executed by a specific endpoint. Please carefully'
-                    . ' study the related Icinga documentation before using this'
-                    . ' feature'
-                ),
-                'multiOptions' => $this->optionalEnum($this->enumEndpoints())
-            ));
+            if ($this->isTemplate()) {
+                $this->addElement('select', 'command_endpoint_id', array(
+                    'label' => $this->translate('Command endpoint'),
+                    'description' => $this->translate(
+                        'Setting a command endpoint allows you to force host checks'
+                        . ' to be executed by a specific endpoint. Please carefully'
+                        . ' study the related Icinga documentation before using this'
+                        . ' feature'
+                    ),
+                    'multiOptions' => $this->optionalEnum($this->enumEndpoints())
+                ));
+            }
 
             foreach (array('master_should_connect', 'accept_config') as $key) {
                 $this->addHidden($key, null);
@@ -104,6 +109,7 @@ class IcingaHostForm extends DirectorObjectForm
             'master_should_connect',
             'accept_config',
             'command_endpoint_id',
+            'api_key',
         );
         $this->addDisplayGroup($elements, 'clustering', array(
             'decorators' => array(
@@ -118,15 +124,6 @@ class IcingaHostForm extends DirectorObjectForm
         return $this;
     }
 
-    protected function hasClusterProperties()
-    {
-        if (!$object = $this->object) {
-            return false;
-        }
-
-        return $object->get('zone_id') || $object->get('has_agent') === 'y';
-    }
-
     protected function beforeSuccessfulRedirect()
     {
         if ($this->allowsExperimental() && $this->getSentValue('create_live') === 'y') {
@@ -138,10 +135,15 @@ class IcingaHostForm extends DirectorObjectForm
     }
 
     /**
-     * @return self
+     * @return $this
      */
     protected function addGroupsElement()
     {
+// TODO:
+        if ($this->hasHostGroupRestriction()) {
+            return $this;
+        }
+
         $groups = $this->enumHostgroups();
         if (empty($groups)) {
             return $this;
@@ -149,8 +151,8 @@ class IcingaHostForm extends DirectorObjectForm
 
         $this->addElement('extensibleSet', 'groups', array(
             'label'        => $this->translate('Groups'),
-            'multiOptions' => $this->optionallyAddFromEnum($groups),
-            'positional'   => false,
+            // 'multiOptions' => $this->optionallyAddFromEnum($groups),
+            'suggest'      => 'hostgroupnames',
             'description'  => $this->translate(
                 'Hostgroups that should be directly assigned to this node. Hostgroups can be useful'
                 . ' for various reasons. You might assign service checks based on assigned hostgroup.'
@@ -163,8 +165,13 @@ class IcingaHostForm extends DirectorObjectForm
         return $this;
     }
 
+    protected function hasHostGroupRestriction()
+    {
+        return $this->getAuth()->getRestrictions('director/filter/hostgroups');
+    }
+
     /**
-     * @return self
+     * @return $this
      */
     protected function addAddressElements()
     {
@@ -189,7 +196,7 @@ class IcingaHostForm extends DirectorObjectForm
     }
 
     /**
-     * @return self
+     * @return $this
      */
     protected function addDisplayNameElement()
     {
@@ -199,6 +206,7 @@ class IcingaHostForm extends DirectorObjectForm
 
         $this->addElement('text', 'display_name', array(
             'label' => $this->translate('Display name'),
+            'spellcheck'  => 'false',
             'description' => $this->translate(
                 'Alternative name for this host. Might be a host alias or and kind'
                 . ' of string helping your users to identify this host'
@@ -234,8 +242,22 @@ class IcingaHostForm extends DirectorObjectForm
                 'name'    => 'object_name',
                 'display' => 'COALESCE(display_name, object_name)'
             )
-        )->where('object_type = ?', 'object')->order('display');
+        )->where(
+            'object_type IN (?)',
+            array('object', 'external_object')
+        )->order('display');
 
         return $db->fetchPairs($select);
+    }
+
+    public function setApi($api)
+    {
+        $this->api = $api;
+        return $this;
+    }
+
+    protected function api()
+    {
+        return $this->api;
     }
 }

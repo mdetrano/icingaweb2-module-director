@@ -95,6 +95,28 @@ abstract class QuickForm extends QuickBaseForm
         return $this;
     }
 
+    protected function addSubmitButton($label, $options = [])
+    {
+        $el = $this->createElement('submit', $label, $options)
+            ->setLabel($label)
+            ->setDecorators(array('ViewHelper'));
+        $this->submitButtonName = $el->getName();
+        $this->setSubmitLabel($label);
+        $this->addElement($el);
+    }
+
+    protected function addStandaloneSubmitButton($label, $options = [])
+    {
+        $this->addSubmitButton($label, $options);
+        $this->addDisplayGroup([$this->submitButtonName], 'buttons', array(
+            'decorators' => array(
+                'FormElements',
+                array('HtmlTag', array('tag' => 'p')),
+            ),
+            'order' => 1000,
+        ));
+    }
+
     protected function addSubmitButtonIfSet()
     {
         if (false === ($label = $this->getSubmitLabel())) {
@@ -105,13 +127,12 @@ abstract class QuickForm extends QuickBaseForm
             return;
         }
 
-        $el = $this->createElement('submit', $label)
-            ->setLabel($label)
-            ->setDecorators(array('ViewHelper'));
-        $this->submitButtonName = $el->getName();
-        $this->addElement($el);
+        $this->addSubmitButton($label);
 
-        $fakeEl = $this->createElement('submit', '_FAKE_SUBMIT')
+        $fakeEl = $this->createElement('submit', '_FAKE_SUBMIT', array(
+            'role' => 'none',
+            'tabindex' => '-1',
+        ))
             ->setLabel($label)
             ->setDecorators(array('ViewHelper'));
         $this->fakeSubmitButtonName = $fakeEl->getName();
@@ -126,6 +147,11 @@ abstract class QuickForm extends QuickBaseForm
             )
         );
 
+        $this->addButtonDisplayGroup();
+    }
+
+    protected function addButtonDisplayGroup()
+    {
         $grp = array(
             $this->submitButtonName,
             $this->deleteButtonName
@@ -149,12 +175,15 @@ abstract class QuickForm extends QuickBaseForm
                 'Fieldset',
             );
         }
-        return $this->addDisplayGroup($elements, $name, $options);
 
+        return $this->addDisplayGroup($elements, $name, $options);
     }
 
     protected function createIdElement()
     {
+        if ($this->isApiRequest()) {
+            return $this;
+        }
         $this->detectName();
         $this->addHidden(self::ID, $this->getName());
         $this->getElement(self::ID)->setIgnore(true);
@@ -194,11 +223,24 @@ abstract class QuickForm extends QuickBaseForm
 
     public function isApiRequest()
     {
-        return $this->isApiRequest;
+        if ($this->isApiRequest === null) {
+            if ($this->request === null) {
+                throw new ProgrammingError(
+                    'Early acess to isApiRequest(). This is not possible, sorry'
+                );
+            }
+
+            return $this->getRequest()->isApiRequest();
+        } else {
+            return $this->isApiRequest;
+        }
     }
 
     public function regenerateCsrfToken()
     {
+        if ($this->isApiRequest()) {
+            return $this;
+        }
         if (! $element = $this->getElement(self::CSRF)) {
             $this->addHidden(self::CSRF, CsrfToken::generate());
             $element = $this->getElement(self::CSRF);
@@ -261,6 +303,9 @@ abstract class QuickForm extends QuickBaseForm
     {
         if ($this->hasBeenSubmitted === null) {
             $req = $this->getRequest();
+            if ($req->isApiRequest()) {
+                return $this->hasBeenSubmitted = true;
+            }
             if ($req->isPost()) {
                 if (! $this->hasSubmitButton()) {
                     return $this->hasBeenSubmitted = $this->hasBeenSent();
@@ -309,7 +354,6 @@ abstract class QuickForm extends QuickBaseForm
         if (! $this->didSetup) {
             $this->beforeSetup();
             $this->setup();
-            $this->addSubmitButtonIfSet();
             $this->onSetup();
             $this->didSetup = true;
         }
@@ -326,6 +370,7 @@ abstract class QuickForm extends QuickBaseForm
         }
 
         $this->prepareElements();
+        $this->addSubmitButtonIfSet();
 
         if ($this->hasBeenSent()) {
             $post = $request->getPost();
@@ -353,20 +398,24 @@ abstract class QuickForm extends QuickBaseForm
 
     public function addException(Exception $e, $elementName = null)
     {
-        $file = preg_split('/[\/\\\]/', $e->getFile(), -1, PREG_SPLIT_NO_EMPTY);
-        $file = array_pop($file);
-        $msg = sprintf(
-            '%s (%s:%d)',
-            $e->getMessage(),
-            $file,
-            $e->getLine()
-        );
-
+        $msg = $this->getErrorMessageForException($e);
         if ($el = $this->getElement($elementName)) {
             $el->addError($msg);
         } else {
             $this->addError($msg);
         }
+    }
+
+    protected function getErrorMessageForException(Exception $e)
+    {
+        $file = preg_split('/[\/\\\]/', $e->getFile(), -1, PREG_SPLIT_NO_EMPTY);
+        $file = array_pop($file);
+        return sprintf(
+            '%s (%s:%d)',
+            $e->getMessage(),
+            $file,
+            $e->getLine()
+        );
     }
 
     public function onSuccess()
@@ -476,7 +525,9 @@ abstract class QuickForm extends QuickBaseForm
                 $req = $this->request;
             }
 
-            if ($req->isPost()) {
+            if ($req->isApiRequest()) {
+                $this->hasBeenSent = true;
+            } elseif ($req->isPost()) {
                 $post = $req->getPost();
                 $this->hasBeenSent = array_key_exists(self::ID, $post) &&
                     $post[self::ID] === $this->getName();

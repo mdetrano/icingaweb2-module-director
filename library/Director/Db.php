@@ -3,7 +3,6 @@
 namespace Icinga\Module\Director;
 
 use Icinga\Module\Director\Data\Db\DbConnection;
-use Icinga\Module\Director\Objects\DirectorDeploymentLog;
 use Icinga\Module\Director\Objects\IcingaEndpoint;
 use Icinga\Module\Director\Objects\IcingaObject;
 use Icinga\Exception\ConfigurationError;
@@ -591,26 +590,6 @@ class Db extends DbConnection
         return $this->enum('icinga_' . $type, null, $filters);
     }
 
-    public function listExternal($type)
-    {
-        $table = IcingaObject::createByType($type)->getTableName();
-
-        $select = $this->db()->select()->from(
-            array('o' => $table),
-            array('object_name' => 'o.object_name')
-        )->where(
-            'object_type = ?',
-            'external_object'
-        )->order('o.object_name');
-
-        $res = $this->db()->fetchCol($select);
-        if (empty($res)) {
-            return array();
-        }
-
-        return array_combine($res, $res);
-    }
-
     public function fetchDistinctHostVars()
     {
         $select = $this->db()->select()->distinct()->from(
@@ -691,34 +670,5 @@ class Db extends DbConnection
         )->order('l.start_time DESC');
 
         return $db->fetchPairs($query);
-    }
-
-    /**
-     * @return DirectorDeploymentLog[]
-     */
-    public function getUncollectedDeployments()
-    {
-        $db = $this->db();
-
-        $query = $db->select()
-            ->from('director_deployment_log')
-            ->where('stage_name IS NOT NULL')
-            ->where('stage_collected IS NULL')
-            ->where('startup_succeeded IS NULL')
-            ->order('stage_name');
-
-        return DirectorDeploymentLog::loadAll($this, $query, 'stage_name');
-    }
-
-    public function hasUncollectedDeployments()
-    {
-        $db = $this->db();
-        $query = $db->select()
-            ->from('director_deployment_log', array('cnt' => 'COUNT(*)'))
-            ->where('stage_name IS NOT NULL')
-            ->where('stage_collected IS NULL')
-            ->where('startup_succeeded IS NULL');
-
-        return $db->fetchOne($query) > 0;
     }
 }
