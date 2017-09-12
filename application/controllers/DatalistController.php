@@ -7,6 +7,8 @@ use Icinga\Module\Director\Objects\DirectorDatalist;
 use Icinga\Module\Director\Objects\DirectorDatalistEntry;
 use Icinga\Exception\NotFoundError;
 use Icinga\Exception\IcingaException;
+use Icinga\Module\Director\Web\Table\DatalistEntryTable;
+
 
 class DatalistController extends ActionController
 {
@@ -22,13 +24,13 @@ class DatalistController extends ActionController
                 return $this->handleApiRequest();
             } catch (NotFoundError $e) {
                 $response->setHttpResponseCode(404);
-                return $this->sendJson((object) array('error' => $e->getMessage()));
+                return $this->sendJson($response, (object) array('error' => $e->getMessage()));
             } catch (Exception $e) {
                 if ($response->getHttpResponseCode() === 200) {
                     $response->setHttpResponseCode(500);
                 }
 
-                return $this->sendJson((object) array('error' => $e->getMessage()));
+                return $this->sendJson($response, (object) array('error' => $e->getMessage()));
             }
         }
     }
@@ -68,7 +70,7 @@ class DatalistController extends ActionController
             case 'GET':
                 $this->requireObject();
                 $props=$this->restProps($this->object);
-                $this->sendJson($props);
+                $this->sendJson($response, $props);
                 return;
 
             case 'PUT':
@@ -120,7 +122,8 @@ class DatalistController extends ActionController
                         unset($replacement['id']);
                         $object->setProperties($replacement);  
                         # for a PUT, remove all entries
-                        $table = $this->loadTable('datalistEntry')->setConnection($this->db())->setList($object);
+                        $table = new DatalistEntryTable($this->db());
+                        //$table = $this->loadTable('datalistEntry')->setConnection($this->db())->setList($object);
                         foreach($table->fetchData() as $entry) {
                             if ($dummy = DirectorDatalistEntry::load(array('list_id' => $object->id, 'entry_name' => $entry->entry_name), $db)) {
                                 $dummy->delete();
@@ -156,14 +159,14 @@ class DatalistController extends ActionController
                     }
                 }
 
-                return $this->sendJson($this->restProps($object));
+                return $this->sendJson($response, $this->restProps($object));
 
  
             case 'DELETE':
                 $this->requireObject();
                 $this->object->delete();
                 $response->setHttpResponseCode(200);
-                $this->sendJson(array('message' => 'object deleted.'));
+                $this->sendJson($response, array('message' => 'object deleted.'));
                 return;
         }
     }
@@ -189,10 +192,11 @@ class DatalistController extends ActionController
                 unset($props[$key]);
             }
         }
-        $table = $this->loadTable('datalistEntry')->setConnection($this->db())->setList($obj);
+        $table = new DatalistEntryTable($this->db());
+        $table->setList($this->object);
         $entrys=array();
-        foreach($table->fetchData() as $entry) {
-            $entrys[$entry->entry_name]=$entry->entry_value;
+        foreach ($table->fetch() as $row) {
+            $entrys[$row->entry_name]=$row->entry_value;
         }
         $props['entries']=$entrys;
         return($props);

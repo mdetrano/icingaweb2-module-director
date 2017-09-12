@@ -4,6 +4,7 @@ namespace Icinga\Module\Director\Controllers;
 
 use Icinga\Module\Director\Web\Controller\ActionController;
 use Icinga\Module\Director\Objects\DirectorDatalist;
+use Icinga\Module\Director\Web\Table\DatalistEntryTable;
 
 class DatalistsController extends ActionController
 {
@@ -14,13 +15,12 @@ class DatalistsController extends ActionController
             $this->redirectNow('director/data/lists');
             return;
         }
-        $table = $this->loadTable('Datalist')->setConnection($this->db());
         $dummy = DirectorDatalist::create(array());
         $objects = array();
-        foreach ($dummy::loadAll($this->db) as $object) {
+        foreach ($dummy::loadAll($this->db()) as $object) {
             $objects[] = $this->restProps($object);
         }
-        return $this->sendJson((object) array('objects' => $objects));
+        return $this->sendJson($this->getResponse(), (object) array('objects' => $objects));
 
     }
 
@@ -33,9 +33,10 @@ class DatalistsController extends ActionController
                 unset($props[$key]);
             }
         }
-        $table = $this->loadTable('datalistEntry')->setConnection($this->db())->setList($obj);
+        $table = new DatalistEntryTable($this->db());
+        $table->setList($obj);
         $entrys=array();
-        foreach($table->fetchData() as $entry) {
+        foreach($table->fetch() as $entry) {
             $entrys[$entry->entry_name]=$entry->entry_value;
         }
         $props['entries']=$entrys;

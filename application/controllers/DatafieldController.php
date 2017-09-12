@@ -23,13 +23,13 @@ class DatafieldController extends ActionController
                 return $this->handleApiRequest();
             } catch (NotFoundError $e) {
                 $response->setHttpResponseCode(404);
-                return $this->sendJson((object) array('error' => $e->getMessage()));
+                return $this->sendJson($response, (object) array('error' => $e->getMessage()));
             } catch (Exception $e) {
                 if ($response->getHttpResponseCode() === 200) {
                     $response->setHttpResponseCode(500);
                 }
 
-                return $this->sendJson((object) array('error' => $e->getMessage()));
+                return $this->sendJson($response, (object) array('error' => $e->getMessage()));
             }
         }
     }
@@ -106,7 +106,7 @@ class DatafieldController extends ActionController
             case 'GET':
                 $this->requireObject();
                 $props=$this->restProps($this->object);
-                $this->sendJson($props);
+                $this->sendJson($response,$props);
                 return;
 
             case 'PUT':
@@ -200,14 +200,14 @@ class DatafieldController extends ActionController
                     $response->setHttpResponseCode(304);
                 }
 
-                return $this->sendJson($this->restProps($object));
+                return $this->sendJson($response,$this->restProps($object));
 
  
             case 'DELETE':
                 $this->requireObject();
                 $this->object->delete();
                 $response->setHttpResponseCode(200);
-                $this->sendJson(array('message' => 'object deleted.'));
+                $this->sendJson($response,array('message' => 'object deleted.'));
                 return;
         }
     }

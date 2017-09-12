@@ -5,6 +5,7 @@ namespace Icinga\Module\Director\Controllers;
 use Icinga\Module\Director\Web\Controller\ActionController;
 use Icinga\Module\Director\Objects\DirectorDatafield;
 use Icinga\Module\Director\Objects\DirectorDatalist;
+use Icinga\Module\Director\Web\Table\DatafieldTable;
 
 class DatafieldsController extends ActionController
 {
@@ -15,13 +16,13 @@ class DatafieldsController extends ActionController
             $this->redirectNow('director/data/fields');
             return;
         }
-        $table = $this->loadTable('Datafield')->setConnection($this->db());
         $dummy = DirectorDatafield::create(array());
         $objects = array();
-        foreach ($dummy::loadAll($this->db) as $object) {
-            $objects[] = $this->restProps($object);;
-        }
-        return $this->sendJson((object) array('objects' => $objects));
+
+        foreach ($dummy::loadAll($this->db()) as $object) {
+            $objects[] = $this->restProps($object);
+        } 
+        return $this->sendJson($this->getResponse(), (object) array('objects' => $objects));
 
     }
 
@@ -35,10 +36,10 @@ class DatafieldsController extends ActionController
             }
         }
         if ($obj->getSetting('datalist_id')) {
-            $datalist = DirectorDatalist::load($obj->getSetting('datalist_id'),$this->db);
+            $datalist = DirectorDatalist::load($obj->getSetting('datalist_id'),$this->db());
             $props['datalist_name']=$datalist->list_name;
         }
-     
+
         return($props);
     }
 
