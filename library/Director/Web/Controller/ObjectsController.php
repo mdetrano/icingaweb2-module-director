@@ -19,6 +19,7 @@ use Icinga\Module\Director\Web\Table\TemplatesTable;
 use Icinga\Module\Director\Web\Tabs\ObjectsTabs;
 use Icinga\Module\Director\Web\Tree\TemplateTreeRenderer;
 use ipl\Html\Link;
+use Icinga\Module\Director\Objects\DirectorDatafield;
 
 abstract class ObjectsController extends ActionController
 {
@@ -269,6 +270,34 @@ abstract class ObjectsController extends ActionController
     {
         $func = "supports$feature";
         return IcingaObject::createByType($this->getType())->$func();
+    }
+
+    public function fieldsAction() {
+        $r=array( 'objects' => array());
+        if (!$this->getRequest()->isApiRequest()) {
+            return;
+        }
+        $class = $this->getObjectClassname();
+        $f_class = $this->getObjectClassname().'Field';
+        $fields = $f_class::loadAll($this->db());
+
+        foreach($fields as $obj) {
+            $rf=$obj->getProperties();;
+            $df = DirectorDatafield::load($obj->datafield_id,$this->db);
+            $obj_id_field=$this->getType().'_id';
+            $o = $class::loadWithAutoIncId($obj->$obj_id_field, $this->db);
+            $rf['object_name']=$df->varname;
+            $rf['object_type']='object'; //pseudo type
+            $rf[$this->getType().'_name']=$o->object_name;
+            foreach(array_keys($rf) as $key) {
+                if (!isset($rf[$key]) || $key== $this->getType().'_id' || $key == 'datafield_id') {
+                    unset($rf[$key]);
+                }
+            }
+            $r['objects'][]=$rf;
+        }
+
+        $this->sendJson($r);
     }
 
     protected function getBaseType()

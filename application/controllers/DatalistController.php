@@ -2,14 +2,13 @@
 
 namespace Icinga\Module\Director\Controllers;
 
-use Icinga\Module\Director\Forms\DirectorDatafieldForm;
 use Icinga\Module\Director\Web\Controller\ActionController;
-use Icinga\Module\Director\Objects\DirectorDatafield;
+use Icinga\Module\Director\Objects\DirectorDatalist;
+use Icinga\Module\Director\Objects\DirectorDatalistEntry;
 use Icinga\Exception\NotFoundError;
 use Icinga\Exception\IcingaException;
-use Icinga\Module\Director\Objects\DirectorDatalist;
 
-class DatafieldController extends ActionController
+class DatalistController extends ActionController
 {
     protected $isApified = true;
     protected $object;
@@ -34,62 +33,25 @@ class DatafieldController extends ActionController
         }
     }
 
-
-    public function addAction()
-    {
-        $this->indexAction();
-    }
-
-    public function editAction()
-    {
-        $this->indexAction();
-    }
-
     public function indexAction()
     {
         if ($this->getRequest()->isApiRequest()) {
             return;
         }
-
-        $edit = false;
-
-        if ($id = $this->params->get('id')) {
-            $edit = true;
-        }
-
-        $form = DirectorDatafieldForm::load()
-            ->setSuccessUrl('director/data/fields')
-            ->setDb($this->db());
-
-        if ($edit) {
-            $form->loadObject($id);
-            $this->addTitle(
-                $this->translate('Modify %s'),
-                $form->getObject()->varname
-            );
-            $this->addSingleTab($this->translate('Edit a Field'));
-        } else {
-            $this->addTitle($this->translate('Add a new Data Field'));
-            $this->addSingleTab($this->translate('New Field'));
-        }
-
-        $form->handleRequest();
-        $this->content()->add($form);
     }
 
 
     protected function loadObject()
     {
-        #Note: assuming varname is unique for API purposes, but this does seem to be enforced by the database
         if (!$this->getRequest()->getParam('name')) {
             return;
         }
         $query = $this->db()->getDbAdapter()
             ->select()
-            ->from('director_datafield')
-            ->where('varname = ?', $this->getRequest()->getParam('name'));
+            ->from('director_datalist')
+            ->where('list_name = ?', $this->getRequest()->getParam('name'));
 
-        $result = DirectorDatafield::loadAll($this->db(), $query);
+        $result = DirectorDatalist::loadAll($this->db(), $query);
         if (!count($result)) {
             throw new NotFoundError('Got invalid name "%s"', $this->getRequest()->getParam('name'));
         }
@@ -122,82 +84,76 @@ class DatafieldController extends ActionController
                 } else {
                     $data = (array) $data;
                 }
-                if (!empty($data['object_name'])) {
-                    $data['varname'] = $data['object_name'];
-                    unset($data['object_name']);
-                }
 
-                if (!empty($data['datalist_name'])) {
-                    $query = $this->db()->getDbAdapter()
-                        ->select()
-                        ->from('director_datalist')
-                       ->where('list_name = ?', $data['datalist_name']);
-
-                    $result = DirectorDatalist::loadAll($this->db(), $query);
-                    if (!count($result)) {
-                        $response->setHttpResponseCode(400);
-                        throw new IcingaException('Got invalid datalist_name: '.$data['datalist_name']);
-                    } else {
-                        $datalist = current($result);
+                $entries=null;
+                $modified=false;
+                if (isset($data['entries'])) {
+                    $entries=array();
+                    foreach($data['entries'] as $e_key => $e_val) {
+                        $entries[$e_key]=$e_val;
                     }
+                    unset($data['entries']);
+                }
+                $data['owner']=$this->Auth()->getUser()->getUsername();
+                if (isset($data['object_name'])) {
+                    $data['list_name']=$data['object_name'];
+                    unset($data['object_name']);
                 }
                 unset($data['object_type']);
 
-                $modified=false;
-
                 if ($object = $this->object) {
                     $old_props = $this->restProps($object);
-                 
-                    if (isset($datalist)) {
-                        if (isset($old_props['datalist_name'])){
-                            $modified = $datalist->list_name != $old_props['datalist_name'];
-                        } else {
-                            $modified = true;
+                    if (isset($entries)) {
+                        if (count($entries) != count($old_props['entries'])) {
+                            $modified=true;
+                        }
+                        if (count(array_diff_assoc($old_props['entries'], $entries))) {
+                            $modified=true;
                         }
                     }
                     if ($request->getMethod() === 'POST') {
                         $object->setProperties($data);
                     } else {
-                        $data = array_merge(array('varname' => $object->get('varname')),$data);
-                        $tmp = DirectorDatafield::create($data, $db);
+                        $data = array_merge(array('list_name' => $object->get('list_name')),$data);
+                        $tmp = DirectorDatalist::create($data, $db);
                         $replacement = $tmp->getProperties();
                         unset($replacement['id']);
-                        $object->setProperties($replacement);
+                        $object->setProperties($replacement);  
+                        # for a PUT, remove all entries
+                        $table = $this->loadTable('datalistEntry')->setConnection($this->db())->setList($object);
+                        foreach($table->fetchData() as $entry) {
+                            if ($dummy = DirectorDatalistEntry::load(array('list_id' => $object->id, 'entry_name' => $entry->entry_name), $db)) {
+                                $dummy->delete();
+                            }
+                        }
                     }
                 } else {
-                    if (empty($data['varname'])) {
+                    if (empty($data['list_name'])) {
                         $response->setHttpResponseCode(400);
                         throw new IcingaException('Must specifiy object_name');
                     }
-
-                    //The API will not allow duplicate varnames
-                    $newname=$data['varname'];
-                    $query = $this->db()->getDbAdapter()
-                        ->select()
-                        ->from('director_datafield')
-                        ->where('varname = ?', $newname);
-
-                    $result = DirectorDatafield::loadAll($this->db(), $query);
-                    if (count($result)) {
-                        throw new IcingaException('Trying to recreate "%s"',$newname);
-                    } 
-
-                    $object = DirectorDatafield::create($data, $db);
+                    $object = DirectorDatalist::create($data, $db);
                 }
-                if (isset($datalist)) {
-                    if (!preg_match('/DataTypeDatalist$/',$object->get('datatype'))) {
-                        $object->set('datalist_id','');
-                    } else {
-                        $object->set('datalist_id', $datalist->id);
-                    }
-                }
-
                 if ($object->hasBeenModified() || $modified) {
                     $status = $object->hasBeenLoadedFromDb() ? 200 : 201;
                     $object->store();
                     $response->setHttpResponseCode($status);
                 } else {
                     $response->setHttpResponseCode(304);
+                }
+
+                if (isset($entries)) {
+                    foreach($entries as $e_key => $e_val) {
+                        $props=array('entry_name' => $e_key, 'list_id' => $object->id, 'entry_value' => $e_val, 'format' => 'string');
+                        try {
+                            $dummy = DirectorDatalistEntry::load(array('list_id' => $object->id, 'entry_name' => $e_key),$db);
+                            $dummy->setProperties($props);
+                            $dummy->store();
+                        } catch (NotFoundError $e) {
+                            $new_entry=DirectorDatalistEntry::create($props, $db);
+                            $new_entry->store();
+                        }
+                    }
                 }
 
                 return $this->sendJson($this->restProps($object));
@@ -225,19 +181,20 @@ class DatafieldController extends ActionController
     }
 
     protected function restProps($obj) {
-        $props=$obj->getProperties();
-        $props['object_name']=$props['varname'];
+        $props=$obj->properties;
+        $props['object_name']=$props['list_name'];
         $props['object_type']='template';
-        foreach(array_keys($props) as $key) {
-            if (is_null($props[$key]) || in_array($key, array('id','varname'))) {
+        foreach (array_keys($props) as $key) {
+            if (is_null($props[$key]) || in_array($key,array('id','owner','list_name'))) {
                 unset($props[$key]);
             }
         }
-        if ($obj->getSetting('datalist_id')) {
-            $datalist = DirectorDatalist::load($obj->getSetting('datalist_id'),$this->db);
-            $props['datalist_name']=$datalist->list_name;
+        $table = $this->loadTable('datalistEntry')->setConnection($this->db())->setList($obj);
+        $entrys=array();
+        foreach($table->fetchData() as $entry) {
+            $entrys[$entry->entry_name]=$entry->entry_value;
         }
-     
+        $props['entries']=$entrys;
         return($props);
     }
 
