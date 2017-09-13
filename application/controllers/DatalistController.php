@@ -123,8 +123,9 @@ class DatalistController extends ActionController
                         $object->setProperties($replacement);  
                         # for a PUT, remove all entries
                         $table = new DatalistEntryTable($this->db());
+                        $table->setList($object);
                         //$table = $this->loadTable('datalistEntry')->setConnection($this->db())->setList($object);
-                        foreach($table->fetchData() as $entry) {
+                        foreach($table->fetch() as $entry) {
                             if ($dummy = DirectorDatalistEntry::load(array('list_id' => $object->id, 'entry_name' => $entry->entry_name), $db)) {
                                 $dummy->delete();
                             }
@@ -193,7 +194,7 @@ class DatalistController extends ActionController
             }
         }
         $table = new DatalistEntryTable($this->db());
-        $table->setList($this->object);
+        $table->setList($obj);
         $entrys=array();
         foreach ($table->fetch() as $row) {
             $entrys[$row->entry_name]=$row->entry_value;
