@@ -11,6 +11,7 @@ use Icinga\Module\Director\Exception\DuplicateKeyException;
 use Icinga\Module\Director\Objects\IcingaObject;
 use Icinga\Module\Director\Util;
 use Icinga\Module\Director\Web\Table\IcingaObjectDatafieldTable;
+use Icinga\Module\Director\Objects\DirectorDatafield;
 
 
 class IcingaObjectHandler extends RequestHandler
@@ -214,7 +215,7 @@ class IcingaObjectHandler extends RequestHandler
             case 'PUT':
             case 'POST':
             case 'DELETE':
-                if (!$this->hasFields()) {
+                if (!$object->supportsFields()) {
                     $this->getResponse()->setHttpResponseCode(400);
                     throw new IcingaException('This object does not support fields');
                     return;
@@ -224,7 +225,7 @@ class IcingaObjectHandler extends RequestHandler
                 $data = json_decode($this->request->getRawBody());
 
                 if ($data === null) {
-                    $this->getResponse()->setHttpResponseCode(400);
+                    $response->setHttpResponseCode(400);
                     throw new IcingaException(
                         'Invalid JSON: %s' . $this->request->getRawBody(),
                         $this->getLastJsonError()
@@ -235,12 +236,12 @@ class IcingaObjectHandler extends RequestHandler
 
                 $related_field=null;
                 if (isset($data['object_name'])) {
-                    $query = $this->db()->getDbAdapter()
+                    $query = $db->getDbAdapter()
                         ->select()
                         ->from('director_datafield')
                         ->where('varname = ?', $data['object_name']);
 
-                    $result = DirectorDatafield::loadAll($this->db(), $query);
+                    $result = DirectorDatafield::loadAll($db, $query);
                     if (count($result)) {
                         $related_field=$result[0];
                         $data['datafield_id']=$related_field->id;
@@ -255,7 +256,7 @@ class IcingaObjectHandler extends RequestHandler
 
                 unset($data['object_type']);
                 unset($data[$this->getType().'_name']);
-                $data[$type.'_id']=$this->object->id;
+                $data[$type.'_id']=$object->id;
 
                 $objectField = null;
                 try {
@@ -269,17 +270,15 @@ class IcingaObjectHandler extends RequestHandler
                     }
                 }
 
-                $response = $this->getResponse();
-
                 if ($request->getMethod() !== 'DELETE') {
                     $objectField->store();
                     $response->setHttpResponseCode(200);
-                    $this->sendJson($response, array('object_name' => $related_field->varname, 'object_type' => 'object', 'is_required' => $objectField->is_required));
+                    $this->sendJson(array('object_name' => $related_field->varname, 'object_type' => 'object', 'is_required' => $objectField->is_required));
                     return;
                 } else {
                     $objectField->delete();
                     $response->setHttpResponseCode(200);
-                    $this->sendJson($response, array('message' => 'Object Field Deleted'));
+                    $this->sendJson(array('message' => 'Object Field Deleted'));
                     return;
                 }
         }
