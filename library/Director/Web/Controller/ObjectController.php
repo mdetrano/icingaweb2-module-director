@@ -480,7 +480,7 @@ abstract class ObjectController extends ActionController
         return $form;
     }
 
-    protected function handleFieldsApiRequest() {
+    protected function handleFieldsApiRequest() {  //TODO, remove from here
         $request = $this->getRequest();
         $db = $this->db();
         $this->requireObject();

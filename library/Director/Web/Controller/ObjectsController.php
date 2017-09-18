@@ -277,15 +277,15 @@ abstract class ObjectsController extends ActionController
         if (!$this->getRequest()->isApiRequest()) {
             return;
         }
-        $class = $this->getObjectClassname();
-        $f_class = $this->getObjectClassname().'Field';
-        $fields = $f_class::loadAll($this->db());
+        $class = IcingaObject::classByType($this->getType());
+        $f_class = $this->getType().'Field';
+        $fields = IcingaObject::loadAllByType($f_class,$this->db());
 
         foreach($fields as $obj) {
             $rf=$obj->getProperties();;
-            $df = DirectorDatafield::load($obj->datafield_id,$this->db);
+            $df = DirectorDatafield::load($obj->datafield_id,$this->db());
             $obj_id_field=$this->getType().'_id';
-            $o = $class::loadWithAutoIncId($obj->$obj_id_field, $this->db);
+            $o = $class::loadWithAutoIncId($obj->$obj_id_field, $this->db());
             $rf['object_name']=$df->varname;
             $rf['object_type']='object'; //pseudo type
             $rf[$this->getType().'_name']=$o->object_name;
@@ -297,7 +297,7 @@ abstract class ObjectsController extends ActionController
             $r['objects'][]=$rf;
         }
 
-        $this->sendJson($r);
+        $this->sendJson($this->getResponse(),$r);
     }
 
     protected function getBaseType()
