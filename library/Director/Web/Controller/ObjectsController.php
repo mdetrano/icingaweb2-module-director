@@ -278,6 +278,9 @@ abstract class ObjectsController extends ActionController
             return;
         }
         $class = IcingaObject::classByType($this->getType());
+        if (! IcingaObject::createByType($this->getType())->supportsFields()) {
+            return;
+        }
         $f_class = $this->getType().'Field';
         $fields = IcingaObject::loadAllByType($f_class,$this->db());
 
