@@ -10,6 +10,8 @@ use Icinga\Module\Director\Core\CoreApi;
 use Icinga\Module\Director\Exception\DuplicateKeyException;
 use Icinga\Module\Director\Objects\IcingaObject;
 use Icinga\Module\Director\Util;
+use Icinga\Module\Director\Web\Table\IcingaObjectDatafieldTable;
+
 
 class IcingaObjectHandler extends RequestHandler
 {
@@ -19,6 +21,14 @@ class IcingaObjectHandler extends RequestHandler
     /** @var CoreApi */
     protected $api;
 
+    public function dispatch() {
+        if ($this->request->getActionName() == 'fields') {
+            $this->processFieldsApiRequest();
+        } else {
+            $this->processApiRequest();
+        }
+    }
+       
     public function setObject(IcingaObject $object)
     {
         $this->object = $object;
@@ -181,21 +191,21 @@ class IcingaObjectHandler extends RequestHandler
     }
 
     protected function processFieldsApiRequest() {
-        $request = $this->getRequest();
-        $db = $this->db();
-        $this->requireObject();
+        $db = $this->db;
+        $request = $this->request;
+        $response = $this->response;
+ 
+        $object= $this->requireObject();
 
         switch ($request->getMethod()) {
             case 'GET':
                 $r=array('objects' => array());
-                if (!$this->object->supportsFields()) {
+                if (!$object->supportsFields()) {
                     $this->sendJson($r);
                     return;
                 }
-                $fields = $this
-                    ->loadTable('icingaObjectDatafield')
-                    ->setObject($this->object);
-                foreach ($fields->fetchData() as $field) {
+                $table = new IcingaObjectDatafieldTable($object);
+                foreach ($table->getQuery()->fetchAll() as $field) {
                     $r['objects'][]=array('object_name' => $field->varname, 'object_type' => 'object', 'is_required' => $field->is_required, $this->getType().'_name' => $this->object->object_name);
                 }
                 $this->sendJson($r);
@@ -211,12 +221,12 @@ class IcingaObjectHandler extends RequestHandler
                 }
 
                 $type = $this->getType();
-                $data = json_decode($request->getRawBody());
+                $data = json_decode($this->request->getRawBody());
 
                 if ($data === null) {
                     $this->getResponse()->setHttpResponseCode(400);
                     throw new IcingaException(
-                        'Invalid JSON: %s' . $request->getRawBody(),
+                        'Invalid JSON: %s' . $this->request->getRawBody(),
                         $this->getLastJsonError()
                     );
                 } else {
@@ -264,12 +274,12 @@ class IcingaObjectHandler extends RequestHandler
                 if ($request->getMethod() !== 'DELETE') {
                     $objectField->store();
                     $response->setHttpResponseCode(200);
-                    $this->sendJson(array('object_name' => $related_field->varname, 'object_type' => 'object', 'is_required' => $objectField->is_required));
+                    $this->sendJson($response, array('object_name' => $related_field->varname, 'object_type' => 'object', 'is_required' => $objectField->is_required));
                     return;
                 } else {
                     $objectField->delete();
                     $response->setHttpResponseCode(200);
-                    $this->sendJson(array('message' => 'Object Field Deleted'));
+                    $this->sendJson($response, array('message' => 'Object Field Deleted'));
                     return;
                 }
         }

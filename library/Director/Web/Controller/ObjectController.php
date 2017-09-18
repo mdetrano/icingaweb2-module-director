@@ -146,6 +146,10 @@ abstract class ObjectController extends ActionController
 
     public function fieldsAction()
     {
+        if ($this->getRequest()->isApiRequest()) {
+            return;
+        }
+
         $this->assertPermission('director/admin');
         $object = $this->requireObject();
         $type = $this->getType();
