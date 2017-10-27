@@ -82,6 +82,10 @@ abstract class ObjectsController extends ActionController
             $table->search($search);
         }
 
+        if ($request->getActionName() === 'applyrules') {
+            $table->filterObjectType('apply');
+        }
+
         return (new IcingaObjectsHandler(
             $request,
             $this->getResponse(),
@@ -269,7 +273,6 @@ abstract class ObjectsController extends ActionController
             $this->apiRequestHandler()->dispatch();
             return;
         }
-
         $type = $this->getType();
 
         if ($this->params->get('format') === 'json') {
