@@ -38,6 +38,13 @@ class ApplyRulesTable extends ZfQueryBasedTable
         return $this;
     }
 
+    public function getType()
+    {
+        return $this->type;
+    }
+
+
+
     public function getColumnsToBeRendered()
     {
         return ['Name', 'assign where'/*, 'Actions'*/];

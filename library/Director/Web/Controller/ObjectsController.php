@@ -74,6 +74,7 @@ abstract class ObjectsController extends ActionController
 
     public function indexAction()
     {
+        $this->table = $this->getTable();
         if ($this->getRequest()->isApiRequest()) {
             $this->apiRequestHandler()->dispatch();
             return;
@@ -155,6 +156,12 @@ abstract class ObjectsController extends ActionController
         }
         $type = $this->getType();
         $shortType = IcingaObject::createByType($type)->getShortTableName();
+        $this->table = TemplatesTable::create($shortType, $this->db());
+        if ($this->getRequest()->isApiRequest()) {
+            $this->apiRequestHandler()->dispatch();
+            return;
+        }
+  
         $this
             ->assertPermission('director/admin')
             ->addObjectsTabs()
@@ -167,7 +174,7 @@ abstract class ObjectsController extends ActionController
 
         $this->params->get('render') === 'tree'
             ? TemplateTreeRenderer::showType($shortType, $this, $this->db())
-            : TemplatesTable::create($shortType, $this->db())->renderTo($this);
+            : $this->table->renderTo($this);
     }
 
     protected function assertApplyRulePermission()
@@ -178,6 +185,14 @@ abstract class ObjectsController extends ActionController
     public function applyrulesAction()
     {
         $type = $this->getType();
+        $this->table = new ApplyRulesTable($this->db());
+        $this->table->setType($this->getType());
+        if ($this->getRequest()->isApiRequest()) {
+            $this->apiRequestHandler()->dispatch();
+            return;
+        }
+ 
+
         $tType = $this->translate(ucfirst($type));
         $this
             ->assertApplyRulePermission()
@@ -205,14 +220,18 @@ abstract class ObjectsController extends ActionController
             )
         );
 
-        $table = new ApplyRulesTable($this->db());
-        $table->setType($this->getType());
-        $table->renderTo($this);
+        $this->table->renderTo($this);
     }
 
     public function setsAction()
     {
         $type = $this->getType();
+
+        if ($this->getRequest()->isApiRequest()) {
+            $this->apiRequestHandler()->dispatch();
+            return;
+        }
+ 
         $tType = $this->translate(ucfirst($type));
         $this
             ->assertPermission('director/' . $this->getBaseType() . 'sets')

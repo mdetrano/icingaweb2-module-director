@@ -9,6 +9,9 @@ use Icinga\Module\Director\Db\Cache\PrefetchCache;
 use Icinga\Module\Director\Objects\IcingaObject;
 use Icinga\Module\Director\Web\Table\ObjectsTable;
 use Zend_Db_Select as ZfSelect;
+use ipl\Web\Table\ZfQueryBasedTable;
+
+
 
 class IcingaObjectsHandler extends RequestHandler
 {
@@ -25,7 +28,8 @@ class IcingaObjectsHandler extends RequestHandler
         }
     }
 
-    public function setTable(ObjectsTable $table)
+    //public function setTable(ObjectsTable $table)
+    public function setTable(ZfQueryBasedTable $table)
     {
         $this->table = $table;
         return $this;
