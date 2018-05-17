@@ -47,6 +47,9 @@ abstract class GroupMembershipResolver
     protected $deferred = false;
 
     /** @var bool */
+    protected $checked = false;
+
+    /** @var bool */
     protected $useTransactions = false;
 
     protected $groupMap;
@@ -66,6 +69,22 @@ abstract class GroupMembershipResolver
         return $this->clearGroups()->clearObjects()->refreshDb(true);
     }
 
+    public function checkDb()
+    {
+        if ($this->checked) {
+            return $this;
+        }
+
+        Benchmark::measure('Rechecking all objects');
+        $this->recheckAllObjects($this->getAppliedGroups());
+        Benchmark::measure('Recheck done, loading existing mappings');
+        $this->fetchStoredMappings();
+        Benchmark::measure('Got stored group mappings');
+
+        $this->checked = true;
+        return $this;
+    }
+
     /**
      * @param bool $force
      * @return $this
@@ -74,13 +93,12 @@ abstract class GroupMembershipResolver
     public function refreshDb($force = false)
     {
         if ($force || ! $this->isDeferred()) {
-            Benchmark::measure('Rechecking all objects');
-            $this->recheckAllObjects($this->getAppliedGroups());
-            Benchmark::measure('Recheck done, loading existing mappings');
-            $this->fetchStoredMappings();
+            $this->checkDb();
+
             Benchmark::measure('Ready, going to store new mappings');
             $this->storeNewMappings();
             $this->removeOutdatedMappings();
+            Benchmark::measure('Updated group mappings in db');
         }
 
         return $this;
@@ -225,6 +243,8 @@ abstract class GroupMembershipResolver
         $this->assertBeenLoadedFromDb($group);
         $this->groups[$group->get('id')] = $group;
 
+        $this->checked = false;
+
         return $this;
     }
 
@@ -237,6 +257,8 @@ abstract class GroupMembershipResolver
         foreach ($groups as $group) {
             $this->addGroup($group);
         }
+
+        $this->checked = false;
 
         return $this;
     }
@@ -267,7 +289,13 @@ abstract class GroupMembershipResolver
     public function clearGroups()
     {
         $this->objects = array();
+        $this->checked = false;
         return $this;
+    }
+
+    public function getNewMappings()
+    {
+        return $this->getDifference($this->newMappings, $this->existingMappings);
     }
 
     /**
@@ -275,7 +303,7 @@ abstract class GroupMembershipResolver
      */
     protected function storeNewMappings()
     {
-        $diff = $this->getDifference($this->newMappings, $this->existingMappings);
+        $diff = $this->getNewMappings();
         $count = count($diff);
         if ($count === 0) {
             return;
@@ -317,9 +345,14 @@ abstract class GroupMembershipResolver
         }
     }
 
+    public function getOutdatedMappings()
+    {
+        return $this->getDifference($this->existingMappings, $this->newMappings);
+    }
+
     protected function removeOutdatedMappings()
     {
-        $diff = $this->getDifference($this->existingMappings, $this->newMappings);
+        $diff = $this->getOutdatedMappings();
         $count = count($diff);
         if ($count === 0) {
             return;
