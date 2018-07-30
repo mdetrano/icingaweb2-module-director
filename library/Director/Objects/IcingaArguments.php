@@ -137,6 +137,7 @@ class IcingaArguments implements Iterator, Countable, IcingaConfigRenderer
             // 'order'    => 'sort_order',
             'description' => 'description',
             'set_if'      => 'set_if',
+            'set_if_format' => 'set_if_format',
         ];
 
         $argValue = null;
