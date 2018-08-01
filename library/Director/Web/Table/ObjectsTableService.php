@@ -28,6 +28,7 @@ class ObjectsTableService extends ObjectsTable
             'host_disabled'    => 'h.disabled',
             'id'               => 'o.id',
             'blacklisted'      => "CASE WHEN hsb.service_id IS NULL THEN 'n' ELSE 'y' END",
+            'service_set'      => 'ss.object_name'
         ];
     }
 
@@ -54,11 +55,14 @@ class ObjectsTableService extends ObjectsTable
             'name' => $row->object_name,
             'host' => $row->host,
             'id'   => $row->id,
+            'set'  => $row->service_set,
         ]);
 
-        $caption = $row->host === null
+        $caption = ($row->host === null && $row->service_set === null)
             ? Html::tag('span', ['class' => 'error'], '- none -')
-            : $row->host;
+            : ($row->host === null)
+                ? $row->service_set
+                : $row->host;
 
         $hostField = static::td(Link::create($caption, $url));
         if ($row->host === null) {
@@ -90,7 +94,10 @@ class ObjectsTableService extends ObjectsTable
             ['hsb' => 'icinga_host_service_blacklist'],
             'hsb.service_id = o.id AND hsb.host_id = o.host_id',
             []
-        )->where('o.service_set_id IS NULL')
-            ->order('o.object_name')->order('h.object_name');
+        )->joinLeft(
+            ['ss' => 'icinga_service_set'],
+            'o.service_set_id = ss.id',
+            []
+        )->order('o.object_name')->order('h.object_name');
     }
 }
