@@ -38,7 +38,8 @@ class ObjectsTableService extends ObjectsTable
         'host_disabled'    => 'h.disabled',
         'id'               => 'o.id',
         'uuid'             => 'o.uuid',
-        'blacklisted'      => "CASE WHEN hsb.service_id IS NULL THEN 'n' ELSE 'y' END",
+	'blacklisted'      => "CASE WHEN hsb.service_id IS NULL THEN 'n' ELSE 'y' END",
+	'service_set'      => 'ss.object_name',
     ];
 
     protected $searchColumns = [
@@ -110,9 +111,18 @@ class ObjectsTableService extends ObjectsTable
 
     public function renderRow($row)
     {
-        $caption = $row->host === null
+        $url = Url::fromPath('director/service/edit', [
+            'name' => $row->object_name,
+            'host' => $row->host,
+            'id'   => $row->id,
+            'set'  => $row->service_set,
+        ]);
+
+        $caption = ($row->host === null && $row->service_set === null)
             ? Html::tag('span', ['class' => 'error'], '- none -')
-            : $row->host;
+            : ($row->host === null)
+                ? $row->service_set
+                : $row->host;
 
         $hostField = static::td($caption);
         if ($row->host === null) {
@@ -202,9 +212,12 @@ class ObjectsTableService extends ObjectsTable
                 ['hsb' => 'icinga_host_service_blacklist'],
                 'hsb.service_id = o.id AND hsb.host_id = o.host_id',
                 []
-            )->where('o.service_set_id IS NULL')
-                ->group(['o.id', 'h.id','hsb.service_id', 'hsb.host_id'])
-                ->order('o.object_name')->order('h.object_name');
+	    )->joinLeft(
+                ['ss' => 'icinga_service_set'],
+                'o.service_set_id = ss.id',
+                []
+            )->group(['o.id', 'h.id','hsb.service_id', 'hsb.host_id'])
+    	     ->order('o.object_name')->order('h.object_name');
 
             if ($this->branchUuid) {
                 $subQuery->where('bo.service_set IS NULL')
