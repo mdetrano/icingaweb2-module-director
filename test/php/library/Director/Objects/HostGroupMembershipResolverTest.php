@@ -4,6 +4,7 @@ namespace Tests\Icinga\Module\Director\Objects;
 
 use Icinga\Exception\NotFoundError;
 use Icinga\Module\Director\Exception\DuplicateKeyException;
+use Icinga\Module\Director\Objects\HostGroupMembershipResolver;
 use Icinga\Module\Director\Objects\IcingaObject;
 use Icinga\Module\Director\Repository\IcingaTemplateRepository;
 use Icinga\Module\Director\Test\BaseTestCase;
@@ -18,7 +19,7 @@ class HostGroupMembershipResolverTest extends BaseTestCase
         IcingaTemplateRepository::clear();
     }
 
-    public static function setUpBeforeClass()
+    public static function cleanArtifacts()
     {
         $db = static::getDb()->getDbAdapter();
 
@@ -28,6 +29,16 @@ class HostGroupMembershipResolverTest extends BaseTestCase
 
         $db->delete('icinga_' . self::TYPE, $where . " AND object_type = 'object'");
         $db->delete('icinga_' . self::TYPE, $where);
+    }
+
+    public static function setUpBeforeClass()
+    {
+        static::cleanArtifacts();
+    }
+
+    public static function tearDownAfterClass()
+    {
+        static::cleanArtifacts();
     }
 
     /**
@@ -99,7 +110,8 @@ class HostGroupMembershipResolverTest extends BaseTestCase
 
         $select = $db->select()
             ->from(
-                ['r' => 'icinga_' . self::TYPE . 'group_' . self::TYPE . '_resolved'], []
+                ['r' => 'icinga_' . self::TYPE . 'group_' . self::TYPE . '_resolved'],
+                []
             )->join(
                 ['o' => 'icinga_' . self::TYPE],
                 'o.id = r.' . self::TYPE . '_id',
@@ -300,8 +312,6 @@ class HostGroupMembershipResolverTest extends BaseTestCase
      */
     public function testChangeAppliedGroupsAfterStatic()
     {
-        $this->markTestSkipped('Pending to be fixed for #1574');
-
         $filter = 'host.vars.match_var=%22magic*%22';
 
         $hostgroup = $this->object('hostgroup', 'apply1', [
@@ -319,5 +329,23 @@ class HostGroupMembershipResolverTest extends BaseTestCase
                 'All Host objects must have apply1 group'
             );
         }
+    }
+
+    /**
+     * @throws \Icinga\Exception\ConfigurationError
+     * @throws \Zend_Db_Adapter_Exception
+     *
+     * @depends testStaticResolvedMappings
+     * @depends testApplyResolvedMappings
+     * @depends testChangeAppliedGroupsAfterStatic
+     */
+    public function testFullRecheck()
+    {
+        $resolver = new HostGroupMembershipResolver($this->getDb());
+
+        $resolver->refreshAllMappings();
+        $this->assertTrue(true); // we reached this without exception
+
+        // TODO: check results of the recheck - it should not change anything at this point
     }
 }
