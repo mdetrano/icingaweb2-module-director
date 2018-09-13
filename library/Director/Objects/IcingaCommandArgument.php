@@ -147,7 +147,7 @@ class IcingaCommandArgument extends IcingaObject
         );
 
         unset($plain->id);
-        unset($plain->argument_format);
+//        unset($plain->argument_format);
 
         return $plain;
     }
