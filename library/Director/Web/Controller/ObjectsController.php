@@ -273,6 +273,7 @@ abstract class ObjectsController extends ActionController
             $this->apiRequestHandler()->dispatch();
             return;
         }
+
         $type = $this->getType();
 
         if ($this->params->get('format') === 'json') {
