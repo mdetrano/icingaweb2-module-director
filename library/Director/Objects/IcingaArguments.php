@@ -153,18 +153,23 @@ class IcingaArguments implements Iterator, Countable, IcingaConfigRenderer
             if (property_exists($value, 'type')) {
                 // argument is directly set as function, no further properties
                 if ($value->type === 'Function') {
-                    $attrs['argument_value'] = '/* Unable to fetch function body through API */';
+                    if (property_exists($value, 'body')) {
+                        $attrs['argument_value'] = $value->body;
+                    } else {
+                        $attrs['argument_value'] = '/* Unable to fetch function body through API */';
+                    }
                     $attrs['argument_format'] = 'expression';
                 }
             } elseif (property_exists($value, 'value')) {
                 // argument is a dictionary with further settings
                 if (is_object($value->value)) {
-                    if ($value->value->type === 'Function' && property_exists($value->value, 'body')) {
-                        // likely an export from Baskets that contains the actual function body
-                        $attrs['argument_value'] = $value->value->body;
-                        $attrs['argument_format'] = 'expression';
-                    } elseif ($value->value->type === 'Function') {
-                        $attrs['argument_value'] = '/* Unable to fetch function body through API */';
+
+                    if ($value->value->type === 'Function') {
+                        if (property_exists($value->value, 'body')) {
+                            $attrs['argument_value'] = $value->value->body;
+                        } else {
+                            $attrs['argument_value'] = '/* Unable to fetch function body through API */';
+                        }
                         $attrs['argument_format'] = 'expression';
                     } else {
                         die('Unable to resolve command argument');
@@ -190,9 +195,13 @@ class IcingaArguments implements Iterator, Countable, IcingaConfigRenderer
             }
         }
 
-        if (array_key_exists('set_if', $attrs)) {
-            if (is_object($attrs['set_if']) && $attrs['set_if']->type === 'Function') {
-                $attrs['set_if'] = '/* Unable to fetch function body through API */';
+        if (array_key_exists('set_if', $attrs) && is_object($attrs['set_if'])) {
+            if ($attrs['set_if']->type === 'Function') {
+                if (property_exists($value, 'body')) {
+                    $attrs['set_if'] = $attrs['set_if']->body;
+                } else {
+                    $attrs['set_if'] = '/* Unable to fetch function body through API */';
+                }
                 $attrs['set_if_format'] = 'expression';
             } elseif (property_exists($value, 'set_if_format')) {
                 if (in_array($value->set_if_format, ['string', 'expression', 'json'])) {
