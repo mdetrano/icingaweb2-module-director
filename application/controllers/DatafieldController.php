@@ -139,11 +139,13 @@ class DatafieldController extends ActionController
                     } else {
                         $datalist = current($result);
                     }
-                }
-                if (!empty($data['target_data_type'])) {
+		}
+		
+		$target_data_type = false;
+                if (array_key_exists( 'target_data_type', $data )) {
                     $target_data_type=$data['target_data_type'];
                 }
-	
+
                 unset($data['object_type']);
 
                 $modified=false;
@@ -205,13 +207,11 @@ class DatafieldController extends ActionController
                         $object->set('datalist_id', $datalist->id);
                     }
                 }
-    
-                if (isset($target_data_type)) {
-                    if (!preg_match('/DataTypeDatalist$|DataTypeDirectorObject$|DataTypeSqlQuery$/',$object->get('datatype'))) {
-                        $object->set('data_type','');
-                    } else {
-                        $object->set('data_type', $target_data_type);
-                    }
+
+                if ( $target_data_type !== false) {
+                    $object->set('data_type', $target_data_type);
+                } else {
+                    $object->set('data_type','');
                 }
 
                 if ($object->hasBeenModified() || $modified) {
