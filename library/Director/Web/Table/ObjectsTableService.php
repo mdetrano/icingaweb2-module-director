@@ -111,12 +111,12 @@ class ObjectsTableService extends ObjectsTable
 
     public function renderRow($row)
     {
-        $url = Url::fromPath('director/service/edit', [
+/**        $url = Url::fromPath('director/service/edit', [
             'name' => $row->object_name,
             'host' => $row->host,
             'id'   => $row->id,
             'set'  => $row->service_set,
-        ]);
+    ]); **/
 
         $caption = ($row->host === null && $row->service_set === null)
             ? Html::tag('span', ['class' => 'error'], '- none -')
