@@ -251,6 +251,7 @@ class ServiceController extends ObjectController
 
         $key = $this->getLegacyKey();
         $uuid = UuidLookup::findServiceUuid($this->db(), $this->getBranch(), ( ($this->host || $this->set) ? 'object' : 'template'), $key, $this->host, $this->set);
+        if ( !$uuid && $this->params->get('id') ) $uuid = UuidLookup::findServiceUuid($this->db(), $this->getBranch(), 'apply' , $key);
         if (!$uuid) throw new \Icinga\Exception\NotFoundError("No such object available");
         $this->params->set('uuid', $uuid->toString());
         parent::loadObject();
