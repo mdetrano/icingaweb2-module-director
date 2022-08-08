@@ -38,8 +38,8 @@ class ObjectsTableService extends ObjectsTable
         'host_disabled'    => 'h.disabled',
         'id'               => 'o.id',
         'uuid'             => 'o.uuid',
-	'blacklisted'      => "CASE WHEN hsb.service_id IS NULL THEN 'n' ELSE 'y' END",
-	'service_set'      => 'ss.object_name',
+        'blacklisted'      => "CASE WHEN hsb.service_id IS NULL THEN 'n' ELSE 'y' END",
+        'service_set'      => 'ss.object_name',
     ];
 
     protected $searchColumns = [
@@ -111,18 +111,11 @@ class ObjectsTableService extends ObjectsTable
 
     public function renderRow($row)
     {
-/**        $url = Url::fromPath('director/service/edit', [
-            'name' => $row->object_name,
-            'host' => $row->host,
-            'id'   => $row->id,
-            'set'  => $row->service_set,
-    ]); **/
-
-        $caption = ($row->host === null && $row->service_set === null)
+        $caption =  (($row->host === null && $row->service_set === null)
             ? Html::tag('span', ['class' => 'error'], '- none -')
-            : ($row->host === null)
+            : (($row->host === null)
                 ? $row->service_set
-                : $row->host;
+                : $row->host));
 
         $hostField = static::td($caption);
         if ($row->host === null) {
