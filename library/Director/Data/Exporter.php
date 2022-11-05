@@ -159,13 +159,16 @@ class Exporter
         } elseif ($object instanceof IcingaServiceSet) {
             if ($object->get('host_id')) {
                 // Sets on Host
-                throw new RuntimeException('Not yet');
-            }
-            $props['services'] = [];
-            foreach ($object->getServices() as $serviceObject) {
-                $props['services'][] = $this->export($serviceObject);
-            }
-            usort($props['services'], [$this, 'sortByName']);
+
+		//    throw new RuntimeException('Not yet');
+	        $props['host']= $object->get('host');	    
+	    } else {
+                $props['services'] = [];
+                foreach ($object->getServices() as $serviceObject) {
+                    $props['services'][] = $this->export($serviceObject);
+                }
+                usort($props['services']);
+	    }
         } elseif ($object instanceof IcingaHost) {
             if ($this->exportHostServices) {
                 $services = [];
