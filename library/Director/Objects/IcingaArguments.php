@@ -160,6 +160,7 @@ class IcingaArguments implements Iterator, Countable, IcingaConfigRenderer
                         : self::COMMENT_DSL_UNSUPPORTED;
                     $attrs['argument_format'] = 'expression';
                 }
+
             } elseif (property_exists($value, 'value')) {
                 // argument is a dictionary with further settings
                 if (is_object($value->value)) {
@@ -196,7 +197,7 @@ class IcingaArguments implements Iterator, Countable, IcingaConfigRenderer
 
         if (array_key_exists('set_if', $attrs)) {
             if (is_object($attrs['set_if']) && $attrs['set_if']->type === 'Function') {
-                $attrs['set_if'] = self::COMMENT_DSL_UNSUPPORTED;
+                #$attrs['set_if'] = self::COMMENT_DSL_UNSUPPORTED;
                 $attrs['set_if_format'] = 'expression';
             } elseif (property_exists($value, 'set_if_format')) {
                 if (in_array($value->set_if_format, ['string', 'expression', 'json'])) {
