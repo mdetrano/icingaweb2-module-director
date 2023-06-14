@@ -6,6 +6,9 @@ use Icinga\Module\Director\Web\Controller\ActionController;
 use Icinga\Module\Director\Objects\DirectorDatalist;
 use Icinga\Module\Director\Web\Table\DatalistEntryTable;
 
+use Ramsey\Uuid\Uuid;
+
+
 class DatalistsController extends ActionController
 {
     var $isApified = true;
@@ -20,6 +23,7 @@ class DatalistsController extends ActionController
         foreach ($dummy::loadAll($this->db()) as $object) {
             $objects[] = $this->restProps($object);
         }
+		    file_put_contents('/tmp/debug_index_datalist',var_export($objects,true));
         return $this->sendJson($this->getResponse(), (object) array('objects' => $objects));
 
     }
@@ -31,6 +35,9 @@ class DatalistsController extends ActionController
         foreach (array_keys($props) as $key) {
             if (is_null($props[$key]) || in_array($key,array('id','owner','list_name'))) {
                 unset($props[$key]);
+            }
+	    if ($key == 'uuid') {
+		    $props[$key] = Uuid::fromBytes($props[$key])->toString();
             }
         }
         $table = new DatalistEntryTable($this->db());
