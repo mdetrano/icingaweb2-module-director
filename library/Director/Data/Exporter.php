@@ -166,8 +166,8 @@ class Exporter
                 $props['services'] = [];
                 foreach ($object->getServices() as $serviceObject) {
                     $props['services'][] = $this->export($serviceObject);
-                }
-                usort($props['services']);
+		}
+		usort($props['services'], [$this, 'sortByName']);
 	    }
         } elseif ($object instanceof IcingaHost) {
             if ($this->exportHostServices) {
