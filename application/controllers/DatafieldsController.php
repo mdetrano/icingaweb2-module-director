@@ -7,6 +7,8 @@ use Icinga\Module\Director\Objects\DirectorDatafield;
 use Icinga\Module\Director\Objects\DirectorDatalist;
 use Icinga\Module\Director\Web\Table\DatafieldTable;
 
+use Ramsey\Uuid\Uuid;
+
 class DatafieldsController extends ActionController
 {
     var $isApified = true;
@@ -33,6 +35,9 @@ class DatafieldsController extends ActionController
         foreach(array_keys($props) as $key) {
             if (is_null($props[$key]) || in_array($key, array('id','varname'))) {
                 unset($props[$key]);
+	    }
+            if ($key == 'uuid') {
+		    $props[$key] = Uuid::fromBytes($props[$key])->toString();
             }
         }
         if ($obj->getSetting('datalist_id')) {
