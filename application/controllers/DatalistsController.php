@@ -23,7 +23,6 @@ class DatalistsController extends ActionController
         foreach ($dummy::loadAll($this->db()) as $object) {
             $objects[] = $this->restProps($object);
         }
-		    file_put_contents('/tmp/debug_index_datalist',var_export($objects,true));
         return $this->sendJson($this->getResponse(), (object) array('objects' => $objects));
 
     }

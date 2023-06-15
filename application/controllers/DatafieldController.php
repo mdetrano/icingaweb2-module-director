@@ -133,9 +133,9 @@ class DatafieldController extends ActionController
                     } else {
                         $datalist = current($result);
                     }
-		}
-		
-		$target_data_type = false;
+                }
+
+                $target_data_type = false;
                 if (array_key_exists( 'target_data_type', $data )) {
                     $target_data_type=$data['target_data_type'];
                 }
@@ -146,7 +146,7 @@ class DatafieldController extends ActionController
 
                 if ($object = $this->object) {
                     $old_props = $this->restProps($object);
-                 
+
                     if (isset($datalist)) {
                         if (isset($old_props['datalist_name'])){
                             $modified = $datalist->list_name != $old_props['datalist_name'];
@@ -163,7 +163,7 @@ class DatafieldController extends ActionController
                             }
                         }
                     }
-                       
+
                     if ($request->getMethod() === 'POST') {
                         $object->setProperties($data);
                     } else {
@@ -190,7 +190,7 @@ class DatafieldController extends ActionController
                     $result = DirectorDatafield::loadAll($this->db(), $query);
                     if (count($result)) {
                         throw new IcingaException('Trying to recreate "%s"',$newname);
-                    } 
+                    }
 
                     $object = DirectorDatafield::create($data, $db);
                 }
@@ -218,7 +218,7 @@ class DatafieldController extends ActionController
 
                 return $this->sendJson($response,$this->restProps($object));
 
- 
+
             case 'DELETE':
                 $this->requireObject();
                 $this->object->delete();
@@ -261,7 +261,7 @@ class DatafieldController extends ActionController
                 $props[$standard_prop]=$obj->getSetting($standard_prop);
             }
         }
-     
+
         return($props);
     }
 
