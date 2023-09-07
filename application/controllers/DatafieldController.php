@@ -8,6 +8,8 @@ use Icinga\Module\Director\Objects\DirectorDatafield;
 use Icinga\Exception\NotFoundError;
 use Icinga\Exception\IcingaException;
 use Icinga\Module\Director\Objects\DirectorDatalist;
+use Icinga\Module\Director\Objects\DirectorDatafieldCategory;
+use Ramsey\Uuid\Uuid;
 
 class DatafieldController extends ActionController
 {
@@ -98,8 +100,8 @@ class DatafieldController extends ActionController
         switch ($request->getMethod()) {
             case 'GET':
                 $this->requireObject();
-                $props=$this->restProps($this->object);
-                $this->sendJson($response,$props);
+		$props=$this->restProps($this->object);
+                $this->sendJson($response, (object) $props);
                 return;
 
             case 'PUT':
@@ -135,6 +137,21 @@ class DatafieldController extends ActionController
                     }
                 }
 
+                if (!empty($data['category_name'])) {
+                    $query = $this->db()->getDbAdapter()
+                        ->select()
+                        ->from('director_datafield_category')
+                       ->where('category_name = ?', $data['category_name']);
+
+                    $result = DirectorDatafieldCategory::loadAll($this->db(), $query);
+                    if (!count($result)) {
+                        $response->setHttpResponseCode(400);
+                        throw new IcingaException('Got invalid category_name: '.$data['category_name']);
+                    } else {
+                        $category = current($result);
+                    }
+                }
+
                 $target_data_type = false;
                 if (array_key_exists( 'target_data_type', $data )) {
                     $target_data_type=$data['target_data_type'];
@@ -153,7 +170,19 @@ class DatafieldController extends ActionController
                         } else {
                             $modified = true;
                         }
-                    }
+		    }
+ 
+		    if (isset($category)) {
+                        if (isset($old_props['category_name'])){
+                            $modified = $category->category_name != $old_props['category_name'];
+                        } else {
+                            $modified = true;
+                        }
+		    } else {
+			if (isset($old_props['category_name'])) $modified = true;
+		    }
+
+
                     foreach(array('target_data_type', 'icinga_object_type','query','resource') as $check_setting) {
                         if (!empty($data[$check_setting])) {
                             if (isset($old_props[$data[$check_setting]])){
@@ -200,6 +229,9 @@ class DatafieldController extends ActionController
                     } else {
                         $object->set('datalist_id', $datalist->id);
                     }
+                }
+                if (isset($category)) {
+                        $object->set('category_id', $category->id);
                 }
 
                 if ( $target_data_type !== false) {
@@ -252,10 +284,20 @@ class DatafieldController extends ActionController
         if ($obj->getSetting('datalist_id')) {
             $datalist = DirectorDatalist::loadWithAutoIncId($obj->getSetting('datalist_id'),$this->db());
             $props['datalist_name']=$datalist->list_name;
+	}
+	if (isset($props['category_id'])) {
+            $category = DirectorDatafieldCategory::loadWithAutoIncId($props['category_id'],$this->db());
+		$props['category_name']=$category->category_name;
+		unset($props['category_id']);
+
         }
         if ($obj->getSetting('data_type')) {
             $props['target_data_type']=$obj->getSetting('data_type');
+	}
+	if (isset($props['uuid'])) {
+		$props['uuid'] = Uuid::fromBytes($props['uuid'])->toString();
         }
+
         foreach (array('icinga_object_type','query','resource') as $standard_prop) {
             if ($obj->getSetting($standard_prop)) {
                 $props[$standard_prop]=$obj->getSetting($standard_prop);
