@@ -167,10 +167,10 @@ class DatafieldController extends ActionController
                     if ($request->getMethod() === 'POST') {
                         $object->setProperties($data);
                     } else {
-                        $data = array_merge(array('varname' => $object->get('varname')),$data);
+                        $data = array_merge(array('varname' => $object->get('varname'), 'uuid' => $object->get('uuid')),$data);
                         $tmp = DirectorDatafield::create($data, $db);
                         $tmp->setProperties($data);
-                        $replacement = array_merge($tmp->getProperties(),$data);
+			$replacement = array_merge($tmp->getProperties(),$data);
                         unset($replacement['id']);
                         $object->setProperties($replacement);
                     }
