@@ -6,6 +6,7 @@ use Icinga\Module\Director\Web\Controller\ActionController;
 use Icinga\Module\Director\Objects\DirectorDatafield;
 use Icinga\Module\Director\Objects\DirectorDatalist;
 use Icinga\Module\Director\Web\Table\DatafieldTable;
+use Icinga\Module\Director\Objects\DirectorDatafieldCategory;
 
 use Ramsey\Uuid\Uuid;
 
@@ -38,6 +39,13 @@ class DatafieldsController extends ActionController
 	    }
             if ($key == 'uuid') {
 		    $props[$key] = Uuid::fromBytes($props[$key])->toString();
+	    }
+	    if ($key == 'category_id') {
+	        if (isset($props[$key])) {
+                	$category = DirectorDatafieldCategory::loadWithAutoIncId($props[$key],$this->db());
+			$props['category_name']=$category->category_name;
+			unset($props[$key]);
+		}
             }
         }
         if ($obj->getSetting('datalist_id')) {
