@@ -9,6 +9,7 @@ use Icinga\Exception\NotFoundError;
 use Icinga\Exception\IcingaException;
 use Icinga\Module\Director\Web\Table\DatalistEntryTable;
 
+use Ramsey\Uuid\Uuid;
 
 class DatalistController extends ActionController
 {
@@ -116,7 +117,7 @@ class DatalistController extends ActionController
                     if ($request->getMethod() === 'POST') {
                         $object->setProperties($data);
                     } else {
-                        $data = array_merge(array('list_name' => $object->get('list_name')),$data);
+                        $data = array_merge(array('list_name' => $object->get('list_name'), 'uuid' => $object->get('uuid')),$data);
                         $tmp = DirectorDatalist::create($data, $db);
                         $replacement = $tmp->getProperties();
                         unset($replacement['id']);
@@ -191,6 +192,9 @@ class DatalistController extends ActionController
         foreach (array_keys($props) as $key) {
             if (is_null($props[$key]) || in_array($key,array('id','owner','list_name'))) {
                 unset($props[$key]);
+	    }
+	    if ($key == 'uuid') {
+		    $props[$key] = Uuid::fromBytes($props[$key])->toString();
             }
         }
         $table = new DatalistEntryTable($this->db());
