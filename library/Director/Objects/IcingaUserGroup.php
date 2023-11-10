@@ -26,4 +26,19 @@ class IcingaUserGroup extends IcingaObjectGroup
     {
         return false;
     }
+ 
+    protected function beforeStore(){
+        if ($this->hasBeenLoadedFromDb()) {
+            if (!array_key_exists('assign_filter', $this->getModifiedProperties())) {
+                $this->memberShipShouldBeRefreshed = false;
+                return;
+            }
+        } else{
+                $this->memberShipShouldBeRefreshed = false;
+                return;
+        }
+
+        $this->memberShipShouldBeRefreshed = true;
+        parent::beforeStore();
+    }
 }
